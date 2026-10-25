@@ -1,11 +1,10 @@
-"""TestLimitationsClaim."""
+"""The limitations the README states, which are claims too."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from importlib.metadata import requires
 
 import pytest
-import tomllib
 
 from lexmatch import (
     Entry,
@@ -40,7 +39,10 @@ class TestLimitationsClaim:
         assert index.answer("what is your role")[0] is None
 
     def test_it_has_no_dependencies(self):
-        """README: 'No dependencies'. The packaged metadata has to agree."""
+        """README: 'No dependencies'. The packaged metadata has to agree.
 
-        data = tomllib.loads(Path("pyproject.toml").read_bytes().decode())
-        assert data["project"]["dependencies"] == []
+        Read from the installed distribution rather than from pyproject.toml,
+        because what a user gets is the metadata — and because tomllib is only
+        in the standard library from 3.11 while this package supports 3.10.
+        """
+        assert not requires("lexmatch")
