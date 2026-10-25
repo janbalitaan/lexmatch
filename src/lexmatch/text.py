@@ -1,4 +1,4 @@
-"""Text normalization and tokenisation for lexical matching."""
+"""Text normalization and tokenization for lexical matching."""
 
 from __future__ import annotations
 

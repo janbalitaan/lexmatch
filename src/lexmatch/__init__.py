@@ -34,9 +34,9 @@ from lexmatch.index import (
     DEFAULT_THRESHOLD,
     LENGTH_PENALTY,
     TERM_FREQUENCY_SATURATION,
-    Entry,
     Index,
 )
+from lexmatch.models import Entry
 from lexmatch.text import STOPWORDS, normalize, query_terms
 
 __all__ = [
