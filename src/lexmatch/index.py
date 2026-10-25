@@ -21,7 +21,8 @@ from lexmatch.constants import (
     TERM_FREQUENCY_SATURATION,
 )
 from lexmatch.models.entry import Entry
-from lexmatch.text import STOPWORDS, normalize, query_terms
+from lexmatch.stopwords import STOPWORDS
+from lexmatch.text import normalize, query_terms
 
 
 class Index:
@@ -136,9 +137,10 @@ class Index:
         content_tokens = query_tokens - STOPWORDS
         best = 0.0
         for phrase in self._phrases[position]:
+            # Phrases are non-empty: an alias that normalizes to nothing is
+            # dropped when the index is built, so there is no empty set to
+            # guard against here.
             phrase_tokens = set(phrase.split())
-            if not phrase_tokens:
-                continue
             if query_tokens == phrase_tokens:
                 return 1.0
             if content_tokens and not (content_tokens & (phrase_tokens - STOPWORDS)):

@@ -6,7 +6,7 @@ caller is listed under **Changed** with what to do about it.
 
 ## [Unreleased]
 
-## [0.1.0]
+## [0.1.0] — 2026-10-26
 
 First release.
 
@@ -23,3 +23,7 @@ First release.
 - Scores scaled to 0–1, so a threshold means the same thing whatever the
   corpus size.
 - Aliases weighted as heavily as the question itself.
+- No dependencies. Python 3.10 and newer, fully typed, with `py.typed`.
+
+[Unreleased]: https://github.com/janbalitaan/lexmatch/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/janbalitaan/lexmatch/releases/tag/v0.1.0
