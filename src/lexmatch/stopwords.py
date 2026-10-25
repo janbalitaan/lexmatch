@@ -1,0 +1,95 @@
+"""Words too common to carry meaning in a query.
+
+Dropped before BM25 scoring, because a word appearing in every entry has
+no discriminating power and would let any two questions look similar. They
+are kept for phrase scoring, where the *arrangement* of common words is
+exactly the signal — "what do you do?" is nothing but stopwords.
+
+Adding a word is the usual tuning step. Check first that it is not
+meaningful in some corpus: "about" is filler in "tell me about X" and
+content in "an about page".
+"""
+
+from __future__ import annotations
+
+STOPWORDS = frozenset(
+    [
+        "a",
+        "about",
+        "an",
+        "and",
+        "any",
+        "are",
+        "as",
+        "at",
+        "be",
+        "been",
+        "being",
+        "but",
+        "by",
+        "can",
+        "could",
+        "did",
+        "do",
+        "does",
+        "doing",
+        "for",
+        "from",
+        "had",
+        "has",
+        "have",
+        "having",
+        "he",
+        "her",
+        "him",
+        "his",
+        "how",
+        "i",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "me",
+        "my",
+        "of",
+        "on",
+        "or",
+        "our",
+        "ours",
+        "she",
+        "should",
+        "so",
+        "some",
+        "tell",
+        "that",
+        "the",
+        "their",
+        "them",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "those",
+        "to",
+        "us",
+        "was",
+        "we",
+        "were",
+        "what",
+        "when",
+        "where",
+        "which",
+        "who",
+        "whom",
+        "why",
+        "will",
+        "with",
+        "would",
+        "you",
+        "your",
+        "yours",
+    ]
+)

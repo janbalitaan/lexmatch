@@ -30,18 +30,21 @@ Scores are scaled to 0..1, so a threshold means the same thing whatever the
 corpus size.
 """
 
-from lexmatch.index import (
+from lexmatch.constants import (
     DEFAULT_THRESHOLD,
     LENGTH_PENALTY,
+    MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION,
-    Index,
 )
+from lexmatch.index import Index
 from lexmatch.models import Entry
-from lexmatch.text import STOPWORDS, normalize, query_terms
+from lexmatch.stopwords import STOPWORDS
+from lexmatch.text import normalize, query_terms
 
 __all__ = [
     "DEFAULT_THRESHOLD",
     "LENGTH_PENALTY",
+    "MIN_CONTENT_OVERLAP",
     "STOPWORDS",
     "TERM_FREQUENCY_SATURATION",
     "Entry",

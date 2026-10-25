@@ -15,18 +15,13 @@ from __future__ import annotations
 
 import math
 
+from lexmatch.constants import (
+    DEFAULT_THRESHOLD,
+    LENGTH_PENALTY,
+    TERM_FREQUENCY_SATURATION,
+)
 from lexmatch.models.entry import Entry
 from lexmatch.text import STOPWORDS, normalize, query_terms
-
-# A question is only answered above this score. Tuned against the template
-# corpus: off-topic questions score 0.2-0.4 from shared filler words alone, so
-# the bar sits above that. Refusing is the right default — a confident wrong
-# answer about someone's career is worse for them than no answer.
-DEFAULT_THRESHOLD = 0.45
-
-# BM25 parameters, named for what they do rather than for the paper.
-TERM_FREQUENCY_SATURATION = 1.4  # above this, repeating a term stops helping
-LENGTH_PENALTY = 0.72  # how much to discount long entries
 
 
 class Index:
