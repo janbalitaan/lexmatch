@@ -1,0 +1,69 @@
+[project]
+name = "lexmatch"
+version = "0.1.0"
+description = "Dependency-free BM25 question matching with phrase scoring, for when embeddings are more machinery than you need"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "janbalitaan" }]
+keywords = ["bm25", "search", "retrieval", "faq", "matching", "nlp", "tfidf"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Text Processing :: Indexing",
+  "Typing :: Typed",
+]
+# No dependencies, and no model. That is the whole point: this runs in a
+# serverless function, in CI, or on a Raspberry Pi with no install step.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/janbalitaan/lexmatch"
+Issues = "https://github.com/janbalitaan/lexmatch/issues"
+
+[build-system]
+requires = ["uv_build>=0.5"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-cov>=6.0", "ruff>=0.8", "ty>=0.0.1a1"]
+
+[tool.ruff]
+line-length = 96
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "TID", "PTH",
+          "RET", "ARG", "PL", "RUF", "S", "D"]
+ignore = ["D107", "D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "PLR2004", "ARG", "D"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.lint.isort]
+known-first-party = ["lexmatch"]
+force-sort-within-sections = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+
+[tool.coverage.run]
+source = ["src/lexmatch"]
+branch = true
