@@ -50,25 +50,6 @@ class Index:
         self._inverse_document_frequency: dict[str, float] = {}
         self._build_statistics()
 
-    def _build_statistics(self) -> None:
-        document_frequency: dict[str, int] = {}
-        for document in self._documents:
-            counts: dict[str, int] = {}
-            for term in document:
-                counts[term] = counts.get(term, 0) + 1
-            self._term_counts.append(counts)
-            for term in counts:
-                document_frequency[term] = document_frequency.get(term, 0) + 1
-
-        total = len(self._documents)
-        # Standard BM25 IDF with the +1 guard, so a term present in every
-        # entry scores zero rather than going negative.
-        self._inverse_document_frequency = {
-            term: math.log(1 + (total - seen + 0.5) / (seen + 0.5))
-            for term, seen in document_frequency.items()
-        }
-        self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
-
     def score(self, query: str) -> list[tuple[float, Entry]]:
         """Score every entry against the query, best first."""
         tokens = query_terms(query)
@@ -87,6 +68,39 @@ class Index:
         ]
         ranked.sort(key=lambda pair: pair[0], reverse=True)
         return ranked
+
+    def answer(self, query: str) -> tuple[Entry | None, float]:
+        """Best entry for the query, or None when nothing clears the bar."""
+        ranked = self.score(query)
+        if not ranked:
+            return None, 0.0
+        best_score, best_entry = ranked[0]
+        if best_score < self.threshold:
+            return None, best_score
+        return best_entry, best_score
+
+    def suggestions(self, limit: int = 5) -> list[str]:
+        """Questions to offer in an empty chat box."""
+        return [entry.question for entry in self.entries[:limit]]
+
+    def _build_statistics(self) -> None:
+        document_frequency: dict[str, int] = {}
+        for document in self._documents:
+            counts: dict[str, int] = {}
+            for term in document:
+                counts[term] = counts.get(term, 0) + 1
+            self._term_counts.append(counts)
+            for term in counts:
+                document_frequency[term] = document_frequency.get(term, 0) + 1
+
+        total = len(self._documents)
+        # Standard BM25 IDF with the +1 guard, so a term present in every
+        # entry scores zero rather than going negative.
+        self._inverse_document_frequency = {
+            term: math.log(1 + (total - seen + 0.5) / (seen + 0.5))
+            for term, seen in document_frequency.items()
+        }
+        self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
         """Compute the best score this query could achieve, to scale to 0..1."""
@@ -139,17 +153,3 @@ class Index:
                 dice = 2 * shared / (len(query_tokens) + len(phrase_tokens))
                 best = max(best, dice)
         return best
-
-    def answer(self, query: str) -> tuple[Entry | None, float]:
-        """Best entry for the query, or None when nothing clears the bar."""
-        ranked = self.score(query)
-        if not ranked:
-            return None, 0.0
-        best_score, best_entry = ranked[0]
-        if best_score < self.threshold:
-            return None, best_score
-        return best_entry, best_score
-
-    def suggestions(self, limit: int = 5) -> list[str]:
-        """Questions to offer in an empty chat box."""
-        return [entry.question for entry in self.entries[:limit]]
