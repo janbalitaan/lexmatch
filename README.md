@@ -4,7 +4,7 @@ BM25 question matching with phrase scoring, and no dependencies.
 
 [![PyPI](https://img.shields.io/pypi/v/lexmatch)](https://pypi.org/project/lexmatch/)
 [![Python](https://img.shields.io/pypi/pyversions/lexmatch)](https://pypi.org/project/lexmatch/)
-[![CI](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yml/badge.svg)](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yml)
+[![CI](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yaml/badge.svg)](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yaml)
 [![License](https://img.shields.io/pypi/l/lexmatch)](https://github.com/janbalitaan/lexmatch/blob/main/LICENSE)
 
 ```python
