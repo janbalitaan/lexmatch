@@ -3,9 +3,9 @@
 BM25 question matching with phrase scoring, and no dependencies.
 
 [![PyPI](https://img.shields.io/pypi/v/lexmatch)](https://pypi.org/project/lexmatch/)
-[![Python](https://img.shields.io/pypi/pyversions/lexmatch)](https://pypi.org/project/lexmatch/)
-[![CI](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yaml/badge.svg)](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yaml)
-[![License](https://img.shields.io/pypi/l/lexmatch)](https://github.com/janbalitaan/lexmatch/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://github.com/janbalitaan/lexmatch/blob/main/pyproject.toml)
+[![CI](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yml/badge.svg)](https://github.com/janbalitaan/lexmatch/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-green)](https://github.com/janbalitaan/lexmatch/blob/main/LICENSE)
 
 ```python
 from lexmatch import Entry, Index

@@ -37,10 +37,11 @@ jobs:
     # distributions between them as an artifact, which costs storage on every
     # release and buys nothing when the two steps are seconds apart.
     runs-on: ubuntu-latest
-    environment:
-      name: >-
-        ${{ (github.event_name == 'release' || inputs.target == 'pypi')
-            && 'pypi' || 'testpypi' }}
+    # No `environment:`. A GitHub environment adds an `environment` claim to
+    # the OIDC token, and a PyPI trusted publisher only matches a token whose
+    # claims it was configured for. Naming one here while the publisher leaves
+    # Environment blank is an invalid-publisher error at upload time, which is
+    # how three releases were lost before the cause was found.
     permissions:
       contents: read
       # Trusted publishing exchanges this short-lived OIDC token for an upload
@@ -72,6 +73,12 @@ jobs:
         with:
           # Empty means PyPI. A manual run defaults to TestPyPI so a mis-click
           # rehearses rather than publishes.
+          # Inverted deliberately, so the non-empty value is the true branch.
+          # `A && B || C` is not a ternary: it yields B when both A and B are
+          # truthy, else C. With `&& '' ||` the empty string is falsy, so every
+          # release took the false branch and went to TestPyPI. Asking "is this
+          # a TestPyPI dispatch?" keeps the empty default where it cannot lose.
           repository-url: >-
-            ${{ (github.event_name == 'release' || inputs.target == 'pypi')
-                && '' || 'https://test.pypi.org/legacy/' }}
+            ${{ (github.event_name == 'workflow_dispatch'
+                 && inputs.target == 'testpypi')
+                && 'https://test.pypi.org/legacy/' || '' }}
