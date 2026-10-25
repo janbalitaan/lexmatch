@@ -13,7 +13,7 @@ uv sync
 uv run pytest
 uv run ruff check src tests
 uv run ty check src
-uv run python scripts/complexity.py src
+uvx complexipy src --max-complexity-allowed 15
 ```
 
 All four must pass. No function may exceed cognitive complexity 15, which the
