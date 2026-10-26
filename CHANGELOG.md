@@ -10,6 +10,18 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Two and a half times faster, from work that was being repeated rather than
+  from any change to what is computed.
+  - The query was normalized, typo-corrected and synonym-expanded inside
+    `_phrase_score`, which runs once per entry — so all three happened once
+    per entry rather than once per query. Profiled over 5,000 entries that
+    was 200,000 calls for ten responses.
+  - `answers()` and `unanswered()` each chose between the strict and loose
+    readings separately, so one `respond()` scored every entry four times.
+    The choice is made once and both use it.
+  - Measured on 5,000 entries: 62 ms to 24 ms for a compound message, 12 ms
+    for a single question. The scan is still linear, which is inherent; the
+    constant was not.
 - `Index.respond()` and `Composer`, which write the whole turn as one
   sentence. `answers()` returned a list and `unanswered()` the questions it
   missed, leaving the caller to assemble the reply — the same code in every

@@ -67,9 +67,13 @@ class TestPhraseScoringEdges:
     """
 
     def test_a_query_with_no_tokens_scores_zero(self, entries):
-        """Normalizing "???" leaves nothing to compare."""
+        """Normalizing "???" leaves nothing to compare.
+
+        The tokens are prepared by `score` now, once per query rather than
+        once per entry, so the empty case is passed in rather than derived.
+        """
         index = Index(entries)
-        assert index._phrase_score(0, "???") == 0.0
+        assert index._phrase_score(0, set(), set()) == 0.0
 
     def test_a_query_of_only_punctuation_is_refused(self, entries):
         """Through the public API it is refused before scoring."""

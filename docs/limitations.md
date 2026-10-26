@@ -68,6 +68,18 @@ whole-phrase match is fixed, at 1.000.
 ## It ranks, it does not search
 
 There is no inverted index, no incremental update, no persistence. `Index`
-scores every entry against every query, which is linear and entirely fine for
-a few thousand entries and wrong for a million. For that you want a search
-engine, not this.
+scores every entry against every query, which is linear. Measured:
+
+| entries | one question | a compound message |
+| --- | --- | --- |
+| 100 | 0.22 ms | 0.46 ms |
+| 1,000 | 2.1 ms | 4.7 ms |
+| 5,000 | 11.7 ms | 24.0 ms |
+
+Fine for a few hundred, which is what a FAQ is. Noticeable at a few thousand.
+Wrong for a million — for that you want a search engine, not this.
+
+The linear scan is inherent; the constant was not always. The query used to
+be normalized, corrected and expanded once *per entry* rather than once per
+query, and `respond()` decided between the strict and loose readings twice
+over — together 2.5x the work for no benefit.

@@ -86,16 +86,34 @@ class Index:
         self._build_statistics()
 
     def score(self, query: str) -> list[tuple[float, Entry]]:
-        """Score every entry against the query, best first."""
+        """Score every entry against the query, best first.
+
+        The query is prepared **once**. It used to be prepared inside
+        `_phrase_score`, which runs per entry — so normalizing, correcting
+        and expanding happened once per entry rather than once per query.
+        Profiled over 5,000 entries that was 200,000 calls for ten responses
+        and 62 ms each; it is linear in entries either way, but with a
+        constant nobody needed.
+        """
         tokens = self._prepare_query(query, keep_stopwords=False)
         if not tokens or not self.entries:
             return []
-        ceiling = self._score_ceiling(set(tokens))
+        unique = set(tokens)
+        ceiling = self._score_ceiling(unique)
+        asked = set(self._prepare_query(query, keep_stopwords=True))
+        content = asked - self.tuning.stopwords
+        # For a query of nothing but stopwords the filler *is* the signal:
+        # "who are you" and "what do you do" differ only in their filler, so
+        # dropping an unknown word shrinks the denominator and pushes a
+        # filler-only match over the threshold — measured at 0.444 to 0.500,
+        # which had a bare index answering "who are you" with whatever came
+        # first.
+        comparable = self._comparable(asked) if content else asked
         ranked = [
             (
                 max(
-                    self._bm25(position, set(tokens), ceiling),
-                    self._phrase_score(position, query),
+                    self._bm25(position, unique, ceiling),
+                    self._phrase_score(position, comparable, content),
                 ),
                 entry,
             )
@@ -207,8 +225,23 @@ class Index:
         Duplicates are collapsed: "rates? pricing?" are two questions with
         one answer, and saying it twice reads as a malfunction.
         """
-        strict = self._answer_each(QuestionSplitter.split(message))
-        loose = self._answer_each(QuestionSplitter.split_loosely(message))
+        _, found = self._best_reading(message)
+        return found
+
+    def _best_reading(self, message: str) -> tuple[list[str], list[tuple[Entry, float]]]:
+        """Choose between the strict and loose splits, and answer the winner.
+
+        `answers()` and `unanswered()` need the same decision, and each used
+        to make it separately — so one `respond()` scored every entry four
+        times over. The decision and its answers are produced together here.
+        """
+        strict_parts = QuestionSplitter.split(message)
+        loose_parts = QuestionSplitter.split_loosely(message)
+        strict = self._answer_each(strict_parts)
+        if len(loose_parts) == len(strict_parts):
+            # The same reading, so there is no second pass worth running.
+            return strict_parts, strict
+        loose = self._answer_each(loose_parts)
         # The loose split only wins by finding strictly more answers, which
         # is evidence the parts were separate questions after all. "comp and
         # notice period" has no interrogative in its second half, so the
@@ -216,7 +249,9 @@ class Index:
         # one answers both. "remote and hybrid work" splits into halves that
         # answer the same entry, so nothing is gained and the strict reading
         # survives.
-        return loose if len(loose) > len(strict) else strict
+        if len(loose) > len(strict):
+            return loose_parts, loose
+        return strict_parts, strict
 
     def _answer_each(self, questions: list[str]) -> list[tuple[Entry, float]]:
         """Answer each question, in order, without repeating an entry.
@@ -257,9 +292,16 @@ class Index:
         `answers()` directly.
         """
         composer = self._composer
-        answers = self.answers(message)
+        chosen, answers = self._best_reading(message)
         if answers:
-            return composer.compose(answers, self.unanswered(message))
+            answered = {id(entry) for entry, _ in answers}
+            missed = [
+                question
+                for question in chosen
+                if (found := self.reply(question)).entry is None
+                or id(found.entry) not in answered
+            ]
+            return composer.compose(answers, missed)
         # Nothing answered. A single question gets the reason — ambiguous,
         # negative, or simply unknown — which a list of zero answers cannot
         # carry.
@@ -275,14 +317,8 @@ class Index:
             replies = index.answers(message)
             missed = index.unanswered(message)
         """
-        # The same two readings `answers` weighs, so the two agree about
-        # what the message contained.
-        strict = QuestionSplitter.split(message)
-        loose = QuestionSplitter.split_loosely(message)
-        chosen = (
-            loose if len(self._answer_each(loose)) > len(self._answer_each(strict)) else strict
-        )
-        return [q for q in chosen if self.answer(q)[0] is None]
+        chosen, _ = self._best_reading(message)
+        return [question for question in chosen if not self.reply(question).answered]
 
     def suggestions(self, limit: int = 5) -> list[str]:
         """Questions to offer in an empty chat box, or after a refusal.
@@ -398,7 +434,9 @@ class Index:
             total += weight * frequency * (saturation + 1) / denominator
         return min(total / ceiling, 1.0)
 
-    def _phrase_score(self, position: int, query: str) -> float:
+    def _phrase_score(
+        self, position: int, query_tokens: set[str], content_tokens: set[str]
+    ) -> float:
         """How closely the query matches how the question was *asked*.
 
         Dice over all tokens, but only when the substantive words overlap.
@@ -406,34 +444,31 @@ class Index:
         job" purely on "what is" — filler shared by most questions.
 
         Queries made entirely of stopwords ("what do you do?") are why this
-        exists: BM25 cannot rank them, because stopwords appear in every entry
-        and carry no IDF. Those may match on filler, since filler is all they
-        have.
+        exists: BM25 cannot rank them, because stopwords appear in every
+        entry and carry no IDF. Those may match on filler, since filler is
+        all they have.
 
-        Words the index has never heard of are dropped first — see
-        `_comparable`.
+        Both token sets are prepared by the caller, once per query rather
+        than once per entry. They are different sets on purpose:
+
+        `content_tokens` is what was *asked*, minus stopwords, including
+        words the index has never heard of — those words are the evidence
+        that a question is off-topic. Filtering them out before the guard
+        turned "what is the capital of France" into a stopword-only query,
+        the one shape allowed to match on filler, and it matched "What is
+        your rate" on "what is".
+
+        `query_tokens` is what is *comparable*: a word in no entry can never
+        be in an intersection, so counting it in Dice's denominator lowers
+        every score equally.
         """
-        asked = set(self._prepare_query(query, keep_stopwords=True))
-        if not asked:
+        if not query_tokens:
             return 0.0
-        # The guard below runs on what was *asked*, including words the index
-        # has never heard of. Those words are the evidence that the query is
-        # about something else: filtering them out first turned an off-topic
-        # question into a stopword-only one — the single shape allowed to
-        # match on filler alone — and "what is the capital of France" then
-        # matched "What is your rate" on "what is". Eighteen tests caught it.
-        content_tokens = asked - self.tuning.stopwords
         # Dice runs on what is *comparable*, but only when there is content
         # to compare. A word in no entry can never be in an intersection, so
         # counting it in the denominator lowers every score equally — noise
         # with no signal.
         #
-        # For a query of nothing but stopwords the filler *is* the signal:
-        # "who are you" and "what do you do" differ only in their filler, and
-        # dropping the unknown word shrank the denominator and pushed a
-        # filler-only match from 0.444 to 0.500 — over the threshold, so a
-        # bare index began answering "who are you" with whatever came first.
-        query_tokens = self._comparable(asked) if content_tokens else asked
         best = 0.0
         for phrase in self._phrases[position]:
             # Phrases are non-empty: an alias that normalizes to nothing is

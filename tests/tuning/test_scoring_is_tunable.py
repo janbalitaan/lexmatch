@@ -112,8 +112,12 @@ class TestTheOverlapGuardIsNowRead:
         ]
         loose = Index(entries, tuning=Tuning(minimum_overlap=1))
         strict = Index(entries, tuning=Tuning(minimum_overlap=2))
-        assert loose._phrase_score(0, "notice of termination") > 0
-        assert strict._phrase_score(0, "notice of termination") == 0
+        # `score` prepares these once per query; the unit takes them ready
+        # so the guard can be exercised without the whole pass.
+        asked = {"notice", "of", "termination"}
+        content = asked - loose.tuning.stopwords
+        assert loose._phrase_score(0, asked, content) > 0
+        assert strict._phrase_score(0, asked, content) == 0
 
     def test_zero_lets_a_query_match_on_filler(self):
         index = Index(DILUTED, tuning=Tuning(minimum_overlap=0))
