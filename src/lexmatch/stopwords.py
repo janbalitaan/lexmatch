@@ -91,5 +91,55 @@ STOPWORDS = frozenset(
         "you",
         "your",
         "yours",
+        # Question-form words: the verbs and hedges a question is built from,
+        # which say nothing about its subject. They were missing, and in a
+        # question set small enough to hand write they are *rare* — so the
+        # inverse document frequency weighting treated them as the most
+        # discriminating words in the index.
+        #
+        # Measured: "how do you think about throughput" was answered with
+        # "How do you think about security?" at 0.713, because "think" scored
+        # the same weight as "throughput" and the security entry shared the
+        # whole form. With "think" dropped, the only content word left is
+        # "throughput", which is an alias of the scale entry, and it wins at
+        # 1.000.
+        #
+        # Words that look like this but are *not* here, because they are the
+        # subject of real questions: "work" (remote work), "manage" (have you
+        # managed a team), "build", "design", "process", "lead", "support",
+        # "test". Adding one of those is how an index stops being able to
+        # answer its own questions.
+        "actually",
+        "approach",
+        "consider",
+        "deal",
+        "ever",
+        "feel",
+        "get",
+        "got",
+        "handle",
+        "kindly",
+        "know",
+        "like",
+        "long",
+        "look",
+        "make",
+        "many",
+        "maybe",
+        "mean",
+        "much",
+        "often",
+        "opinion",
+        "perhaps",
+        "please",
+        "really",
+        "say",
+        "see",
+        "take",
+        "think",
+        "use",
+        "usually",
+        "view",
+        "want",
     ]
 )

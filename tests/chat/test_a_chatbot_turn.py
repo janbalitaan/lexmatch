@@ -62,6 +62,12 @@ class TestAClearMatch:
         assert index.reply("design rate").score > 0.9
 
 
+FIRST = Entry(question="What is your rate for design work?", answer="£600.")
+SECOND = Entry(question="What is your rate for review work?", answer="£500.")
+THIRD = Entry(question="What is your rate for audit work?", answer="£550.")
+FOURTH = Entry(question="What is your notice period?", answer="One month.")
+
+
 class TestAnAmbiguousQuestion:
     """The worst of the old behaviour: two entries tied and one was picked."""
 
@@ -94,19 +100,27 @@ class TestAnAmbiguousQuestion:
         assert set(reply.suggestions) == {entry.question for entry in reply.alternatives}
 
     def test_a_wider_margin_finds_more_ambiguity(self):
-        """Only entries that *cleared the threshold* can be contenders — an
-        entry scoring zero is not a candidate however wide the margin. So
-        the margin is tested where three entries genuinely compete."""
-        competing = [
-            Entry(question="What is your rate for design work?", answer="£600."),
-            Entry(question="What is your rate for review work?", answer="£500."),
-            Entry(question="What is your rate for audit work?", answer="£550."),
-        ]
-        narrow = Index(competing, tuning=Tuning(ambiguity_margin=0.0))
-        wide = Index(competing, tuning=Tuning(ambiguity_margin=0.9))
-        query = "what is your rate for consulting work"
-        assert len(wide.reply(query).alternatives) >= len(narrow.reply(query).alternatives)
-        assert len(wide.reply(query).alternatives) == 3
+        """Tested on `_contenders` rather than through a corpus.
+
+        The margin decides how far below the best score an entry may sit and
+        still count as a contender, which is arithmetic. Driving it through
+        an index needs a corpus whose scores form a graded tail, and the
+        scorer no longer produces one — weighting the overlap by inverse
+        document frequency puts a non-matching entry at exactly 0.000, so
+        every fixture that used to grade now has two scores and a cliff.
+        Testing the arithmetic through that corpus tested the corpus.
+        """
+        ranked = [(0.90, FIRST), (0.88, SECOND), (0.70, THIRD), (0.40, FOURTH)]
+        narrow = Index([FIRST], tuning=Tuning(ambiguity_margin=0.01))
+        wide = Index([FIRST], tuning=Tuning(ambiguity_margin=0.25))
+        assert len(narrow._contenders(ranked, 0.90)) == 1
+        assert len(wide._contenders(ranked, 0.90)) == 3
+
+    def test_a_non_matching_entry_is_never_a_contender(self):
+        """However wide the margin. The threshold comes first."""
+        ranked = [(0.90, FIRST), (0.00, SECOND)]
+        wide = Index([FIRST], tuning=Tuning(ambiguity_margin=1.0))
+        assert len(wide._contenders(ranked, 0.90)) == 1
 
     def test_a_zero_margin_only_catches_an_exact_tie(self):
         exact = Index(ENTRIES, tuning=Tuning(ambiguity_margin=0.0))
@@ -252,14 +266,36 @@ class TestAWeakTieIsNotAmbiguity:
         Entry(question="Do you enjoy the work?", answer="Very much.", aliases=["enjoyment"]),
         Entry(question="Is the work interesting?", answer="Usually.", aliases=["interest"]),
     ]
-    #: Scores 0.230 — a shared "work" plus filler, well under the threshold.
+    #: A shared "work" plus filler, well under the threshold.
     WEAK = "you work"
+    #: A realistic index. Two entries that differ by one word score poorly
+    #: against everything, because every word they share has a low inverse
+    #: document frequency — so a fixture of only those tests the dilution
+    #: rather than the behaviour under test.
+    RATES: ClassVar[list[Entry]] = [
+        Entry(question="What is your rate for design work?", answer="DESIGN"),
+        Entry(question="What is your rate for review work?", answer="REVIEW"),
+        Entry(question="What is your notice period?", answer="NOTICE", aliases=["notice"]),
+        Entry(question="Are you open to remote work?", answer="REMOTE", aliases=["remote"]),
+        Entry(question="Do you need visa sponsorship?", answer="VISA", aliases=["visa"]),
+        Entry(question="What is your tech stack?", answer="STACK", aliases=["stack"]),
+        Entry(question="Have you led a team?", answer="LEAD", aliases=["leadership"]),
+        Entry(question="How many years of experience?", answer="YEARS", aliases=["experience"]),
+    ]
 
-    def test_filler_no_longer_produces_a_tie_at_all(self):
-        """The regression guard for the weighting that made the floor moot."""
+    def test_filler_scores_near_nothing(self):
+        """The regression guard for the weighting that made the floor moot.
+
+        "what do you work on" once tied four ways at 0.537 and produced a
+        clarifying question listing unrelated entries. Weighting the overlap
+        by inverse document frequency, and then confining the comparison to
+        content words, left it scoring almost nothing at all — which is the
+        honest reading of a question whose only substantive word is in every
+        entry.
+        """
         ranked = Index(self.COMMON).score("what do you work on")
-        assert ranked[0][0] - ranked[1][0] > 0.4, (
-            f"filler is tying again: {ranked[0][0]:.3f} vs {ranked[1][0]:.3f}"
+        assert ranked[0][0] < Index(self.COMMON).threshold, (
+            f"filler scored {ranked[0][0]:.3f}, over the threshold"
         )
 
     def test_a_weak_tie_is_reported_as_unanswered(self):
@@ -279,15 +315,13 @@ class TestAWeakTieIsNotAmbiguity:
         assert loose.reply(self.WEAK).outcome is Outcome.AMBIGUOUS
 
     def test_a_confident_tie_is_still_ambiguity(self):
-        """Two rate entries and a query naming neither: 0.580, over the
-        floor, and asking which was meant is exactly right."""
-        confident = [
-            Entry(question="What is your rate for design work?", answer="£600."),
-            Entry(question="What is your rate for review work?", answer="£500."),
-        ]
-        reply = Index(confident).reply("what is your rate")
+        """Two rate entries among six others, and a query naming neither:
+        0.744, over the floor, and asking which was meant is right."""
+        index = Index(self.RATES)
+        reply = index.reply("what is your rate")
         assert reply.outcome is Outcome.AMBIGUOUS
-        assert reply.score >= Index(confident).tuning.ambiguity_floor
+        assert reply.score >= index.tuning.ambiguity_floor
+        assert {entry.answer for entry in reply.alternatives} == {"DESIGN", "REVIEW"}
 
     def test_at_most_three_alternatives_are_offered(self):
         """Two is a question; five is a menu, and a menu is what

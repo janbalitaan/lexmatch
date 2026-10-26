@@ -100,3 +100,25 @@ AMBIGUITY_ALTERNATIVES = 3
 # Renaming this is enough to opt a custom set of entries into the same
 # treatment, or out of it.
 SMALL_TALK_TAG = "smalltalk"
+
+
+# How much a word the index has never seen costs the query's confidence.
+#
+# An unknown word has no inverse document frequency, so it contributes
+# nothing to the score ceiling and is effectively invisible — which leaves a
+# query satisfiable by matching only the words it happened to share. Measured
+# against a twenty-five entry index, "what dashboards do you build" scored
+# 1.000 against "How do you decide build versus buy?" with "dashboards"
+# discarded before anything was scored.
+#
+# Charging for it is nonetheless **off by default**, because measuring it
+# across 133 questions from thirty-seven simulated askers showed it costs
+# more than it saves: at 1.0 the suite fell from 81.2% to 73.7%, because a
+# real question with one unrecognized word has its confidence halved and
+# drops below the threshold. It converts correct answers into refusals faster
+# than it converts wrong answers into refusals.
+#
+# Raise it toward 1.0 for an index where a wrong answer is worse than no
+# answer — a support bot whose topics are deliberately narrow, where most of
+# what it is asked is out of scope and the refusal is the product.
+UNKNOWN_WORD_COST = 0.0

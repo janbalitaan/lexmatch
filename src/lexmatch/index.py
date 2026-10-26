@@ -82,23 +82,32 @@ class Index:
         expand = self.tuning.synonyms.expand
         # Both sides go through the same map, so a short form in a query
         # meets a long form in an entry whichever one was written short.
-        self._documents: list[list[str]] = [expand(entry.terms()) for entry in entries]
+        # Stemming folds inflections onto one token, and runs last so the
+        # synonym map stays keyed on words a developer would write. Both the
+        # index and the query go through `Tuning.fold`, so the two agree.
+        fold = self.tuning.fold
+        self._documents: list[list[str]] = [fold(expand(entry.terms())) for entry in entries]
         self._phrases: list[list[str]] = [entry.asked_phrases() for entry in entries]
         # The phrases as token sets, and their weight. Both are properties of
         # the index, so computing them per query meant splitting every phrase
         # of every entry on every reply and summing its weight again.
         self._phrase_tokens: list[list[frozenset[str]]] = [
-            [frozenset(phrase.split()) for phrase in phrases] for phrases in self._phrases
+            [frozenset(fold(phrase.split())) for phrase in phrases] for phrases in self._phrases
         ]
-        self._phrase_mass: list[list[float]] = []
         self._lengths: list[int] = [len(document) for document in self._documents]
+        # Filled by `_build_statistics`, once the stopword set and the
+        # weights it needs both exist.
+        self._phrase_content: list[list[frozenset[str]]] = []
+        self._phrase_content_mass: list[list[float]] = []
         # Which words each entry's own phrasings use, for holding a small-talk
         # entry back from a substantive question. Built here rather than per
         # query: deriving it in the scoring loop normalized every phrase of
         # every entry on every reply, and took one reply against 5000 entries
         # from 2.4 ms to 27 ms.
         self._social_tokens: list[frozenset[str]] = [
-            frozenset(_phrasing_tokens(entry)) if SMALL_TALK_TAG in entry.tags else frozenset()
+            frozenset(fold(list(_phrasing_tokens(entry))))
+            if SMALL_TALK_TAG in entry.tags
+            else frozenset()
             for entry in entries
         ]
         self._average_length: float = (
@@ -108,8 +117,21 @@ class Index:
         # is compared against. Built once: a query corrects against the
         # vocabulary, not against a dictionary, so it can only ever be
         # corrected toward something this index could answer.
+        # Unstemmed, because this is what a mistyped word is compared
+        # against: "notce" has to reach "notice", and comparing it to the
+        # stem "notic" is a worse match on a word nobody wrote.
         self._vocabulary: frozenset[str] = frozenset(
-            term for document in self._documents for term in document
+            term for entry in entries for term in expand(entry.terms())
+        )
+        # The stopwords as the scorer will meet them. Stemming is applied to
+        # tokens but the stopword set is written in whole words, so the two
+        # stopped lining up: "there" folds to "ther", which is in no stopword
+        # list, so "hey there" turned into a greeting plus a content word that
+        # no greeting covers — and was refused at 0.000 where it had scored
+        # 1.000. The originals are kept alongside, because an unfolded token
+        # still has to be recognized.
+        self._stopwords: frozenset[str] = self.tuning.stopwords | frozenset(
+            self.tuning.fold(list(self.tuning.stopwords))
         )
         self._term_counts: list[dict[str, int]] = []
         self._inverse_document_frequency: dict[str, float] = {}
@@ -128,7 +150,7 @@ class Index:
         asked = set(self._prepare_query(query))
         if not asked or not self.entries:
             return []
-        content = asked - self.tuning.stopwords
+        content = asked - self._stopwords
         # BM25 sees the substantive words only. Stopwords appear in every
         # entry and carry no IDF, exactly as `_phrase_score` documents — so
         # ranking by them is ranking by noise. An earlier version fed BM25
@@ -146,13 +168,11 @@ class Index:
         # which had a bare index answering "who are you" with whatever came
         # first.
         comparable = self._comparable(asked) if content else asked
-        idf = self._inverse_document_frequency
-        query_mass = sum(idf.get(token, 0.0) for token in comparable)
         ranked = [
             (
                 max(
                     self._bm25(position, unique, ceiling) * specificity,
-                    self._phrase_score(position, comparable, content, asked, query_mass),
+                    self._phrase_score(position, comparable, content, asked),
                 )
                 * self._social_scale(position, content),
                 entry,
@@ -185,6 +205,61 @@ class Index:
 
         Collapsing those into `(None, 0.0)` is how a bot comes to answer
         about design rates when it was asked about rates.
+        """
+        # Only a message that actually splits can be compound, and the check
+        # below costs a full scoring pass per part. Asking the splitter first
+        # is two regular expressions; `_best_reading` on a single question
+        # scored every entry two or three times for nothing, which took a
+        # reply against 5000 entries from 18 ms to 36.
+        if QuestionSplitter.looks_compound(query):
+            answered = self._best_reading(query)[1]
+            # Compared by identity: Entry holds lists, so it is unhashable
+            # and a set of them cannot be built.
+            distinct = {id(entry) for entry, _ in answered}
+            if len(distinct) > 1:
+                # Two questions, not one ambiguous question. Ambiguity is
+                # *one* question matching two entries; asking which was meant
+                # when two were asked answers neither.
+                #
+                # Measured: "yoe and tech stack?" tied at 0.586 between the
+                # experience and stack entries and asked which was meant,
+                # while `answers()` on the same message had already resolved
+                # it to both. `reply()` scored the whole string and never
+                # consulted the reading, so the two disagreed about a message
+                # a recruiter would send first.
+                # The substantive part leads, not whichever came first.
+                # "Hi — do you have capacity for three months?" answers the
+                # greeting and the question both, and headlining the greeting
+                # reads as having ignored the question: measured, two such
+                # messages were answered with "Hello." at 1.000 while the real
+                # answer sat in `alternatives`.
+                ordered = sorted(answered, key=self._social_last)
+                first, first_score = ordered[0]
+                return Reply(
+                    outcome=Outcome.ANSWERED,
+                    entry=first,
+                    score=first_score,
+                    alternatives=tuple(entry for entry, _ in ordered[1:]),
+                )
+        return self._reply_to_one(query)
+
+    @staticmethod
+    def _social_last(answered: tuple[Entry, float]) -> tuple[bool, float]:
+        """Sort key putting small talk after everything else.
+
+        Within each group the higher score comes first, so the strongest
+        substantive answer leads and the pleasantry trails.
+        """
+        entry, score = answered
+        return (SMALL_TALK_TAG in entry.tags, -score)
+
+    def _reply_to_one(self, query: str) -> Reply:
+        """Answer a query read as a single question.
+
+        Separate from `reply` so the compound check happens once, at the top.
+        `_best_reading` answers each part to decide which reading to keep, so
+        a compound check inside this method would call itself through that —
+        which it did, as unbounded recursion.
         """
         ranked = self.score(query)
         if not ranked:
@@ -323,7 +398,7 @@ class Index:
         found: list[tuple[Entry, float]] = []
         seen: set[int] = set()
         for question in questions:
-            reply = self.reply(question)
+            reply = self._reply_to_one(question)
             if not reply.answered or reply.entry is None:
                 continue
             if id(reply.entry) in seen:
@@ -411,10 +486,19 @@ class Index:
             for term, seen in document_frequency.items()
         }
         self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
+        # The phrases with their stopwords removed, and the weight of what is
+        # left. Both are properties of the index, and deriving them inside the
+        # ranking loop subtracted a hundred-word set and re-summed its weights
+        # for every phrase of every entry on every reply — 18 ms a reply
+        # against 5000 entries became 38.
         idf = self._inverse_document_frequency
-        self._phrase_mass = [
-            [sum(idf.get(token, 0.0) for token in tokens) for tokens in per_entry]
+        self._phrase_content = [
+            [tokens - self._stopwords for tokens in per_entry]
             for per_entry in self._phrase_tokens
+        ]
+        self._phrase_content_mass = [
+            [sum(idf.get(token, 0.0) for token in tokens) for tokens in per_entry]
+            for per_entry in self._phrase_content
         ]
 
     def _social_scale(self, position: int, content_tokens: set[str]) -> float:
@@ -447,7 +531,7 @@ class Index:
         # suppressed a reply that was entirely correct. "is the pay good" is
         # still suppressed, because "pay" survives this.
         uncovered = (
-            content_tokens - covered - self.tuning.stopwords - QuestionSplitter.ACKNOWLEDGEMENTS
+            content_tokens - covered - self._stopwords - QuestionSplitter.ACKNOWLEDGEMENTS
         )
         return 0.0 if uncovered else 1.0
 
@@ -455,9 +539,9 @@ class Index:
         self,
         shared: set[str],
         query_tokens: set[str],
-        phrase_tokens: frozenset[str],
+        phrase_tokens: frozenset[str] | set[str],
         query_mass: float,
-        phrase_mass: float,
+        phrase_mass: float | None,
     ) -> float:
         """Dice over the tokens' *weight* rather than their count.
 
@@ -474,10 +558,6 @@ class Index:
         almost nothing to either side, so a shared question form no longer
         looks like a shared subject.
 
-        The query's weight and each phrase's weight are passed in: the first
-        is constant for a query and the second is a property of the index, so
-        computing them here meant summing them again for every entry.
-
         The zero-weight fallback counts tokens instead. The `+ 1` guard in
         the inverse document frequency means a term in every entry still
         scores about 0.29, so this is unreachable with the built-in weights —
@@ -486,6 +566,8 @@ class Index:
         by it.
         """
         idf = self._inverse_document_frequency
+        if phrase_mass is None:
+            phrase_mass = sum(idf.get(token, 0.0) for token in phrase_tokens)
         total_mass = query_mass + phrase_mass
         if total_mass <= _NEGLIGIBLE:
             return 2 * len(shared) / (len(query_tokens) + len(phrase_tokens))
@@ -544,7 +626,7 @@ class Index:
         """
         words = normalize(query, keep_stopwords=True)
         corrected = self.tuning.corrections.apply(words, self._vocabulary)
-        return self.tuning.synonyms.expand(corrected)
+        return self.tuning.fold(self.tuning.synonyms.expand(corrected))
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
         """Compute the best score this query could achieve, to scale to 0..1.
@@ -567,7 +649,27 @@ class Index:
         term's own ceiling makes the normalization reachable.
 
         A term the index has never seen contributes nothing to either side,
-        so it neither helps nor penalizes.
+        so it neither helps nor penalizes. That is deliberate and was
+        measured twice, because the alternative is tempting: an unknown word
+        is invisible, which leaves "do you like working alone" scoring 1.000
+        against "Are you open to remote work?" on the one word they share.
+
+        Both ways of charging for it made the library worse across 133
+        questions from thirty-seven simulated askers:
+
+            ignoring unknown words (this)        81.2%
+            charging a linear cost for them      73.7%
+            counting them at a zero-document
+            frequency, which is the highest
+            weight the formula gives             69.9%
+
+        The reason is structural. In a question set small enough to hand
+        write, most words in a naturally phrased question are absent from
+        every entry — they are conversational, not substantive. Charging for
+        an unknown word therefore charges for natural phrasing, and that is
+        the defect the reachable ceiling above exists to fix. `Tuning.
+        unknown_word_cost` is still there for an index where a wrong answer
+        is worse than no answer.
         """
         saturation = self.tuning.saturation
         scale = (saturation + 1) / saturation
@@ -599,6 +701,23 @@ class Index:
         offered rather than one being guessed at.
 
         Capped at 1, so a long specific query is not rewarded twice.
+
+        Multiplied by how much of the query the index recognized at all. A
+        word the index has never seen has no inverse document frequency, so
+        it contributed nothing to the ceiling either — which made it
+        *invisible*, and left any query perfectly satisfiable by matching
+        only the words it happened to share:
+
+            'what dashboards do you build'   1.000 "How do you decide build
+                                                    versus buy?"
+            'would you be a technical
+             cofounder'                      1.000 "How do you approach
+                                                    technical debt?"
+
+        Both scored full marks on one shared word while the word the question
+        was actually about — "dashboards", "cofounder" — was discarded before
+        anything was scored. Recognizing half of a question is not grounds
+        for a confident answer to it.
         """
         mass = sum(self._inverse_document_frequency.get(term, 0.0) for term in unique_tokens)
         if not unique_tokens or self._max_idf <= 0:
@@ -606,7 +725,20 @@ class Index:
             # entry. Either way there is nothing for BM25 to be confident
             # about, and the phrase scorer is what speaks for such a query.
             return 0.0
-        return min(mass / self._max_idf, 1.0)
+        return min(mass / self._max_idf, 1.0) * self._recognized(unique_tokens)
+
+    def _recognized(self, unique_tokens: set[str]) -> float:
+        """Return what fraction of the query's content words the index has seen.
+
+        Counted rather than weighted, because an unknown word has no weight
+        to count — that is the whole problem. Tuned by
+        `Tuning.unknown_word_cost`: 1.0 charges the full fraction, 0.0
+        restores the old behavior of ignoring unknown words.
+        """
+        known = sum(1 for term in unique_tokens if term in self._inverse_document_frequency)
+        fraction = known / len(unique_tokens)
+        cost = self.tuning.unknown_word_cost
+        return fraction * cost + (1.0 - cost)
 
     def _bm25(self, position: int, unique_tokens: set[str], ceiling: float) -> float:
         counts = self._term_counts[position]
@@ -630,7 +762,6 @@ class Index:
         query_tokens: set[str],
         content_tokens: set[str],
         asked: set[str],
-        query_mass: float,
     ) -> float:
         """How closely the query matches how the question was *asked*.
 
@@ -659,25 +790,28 @@ class Index:
         """
         if not query_tokens:
             return 0.0
-        # Dice runs on what is *comparable*, but only when there is content
-        # to compare. A word in no entry can never be in an intersection, so
-        # counting it in the denominator lowers every score equally — noise
-        # with no signal.
-        #
+        idf = self._inverse_document_frequency
+        query_content = query_tokens & content_tokens
+        query_mass = sum(
+            idf.get(token, 0.0) for token in (query_content if content_tokens else query_tokens)
+        )
         best = 0.0
-        stopwords = self.tuning.stopwords
         # Phrases are non-empty: an alias that normalizes to nothing is
         # dropped when the index is built, so there is no empty set to guard
-        # against here. The tokens and their weight are built with the index.
-        for phrase_tokens, phrase_mass in zip(
-            self._phrase_tokens[position], self._phrase_mass[position], strict=True
+        # against here. The tokens, their content and its weight are all
+        # built with the index.
+        for phrase_tokens, phrase_content, phrase_mass in zip(
+            self._phrase_tokens[position],
+            self._phrase_content[position],
+            self._phrase_content_mass[position],
+            strict=True,
         ):
             # The constant described this guard but was never read: the
             # requirement was hard-coded at "any overlap at all", so a
             # caller who raised MIN_CONTENT_OVERLAP got no change. Reading it
             # is what makes it tunable, and raising it to 2 is the lever for
             # an index whose entries share a lot of vocabulary.
-            shared_content = content_tokens & (phrase_tokens - stopwords)
+            shared_content = content_tokens & phrase_content
             if content_tokens and len(shared_content) < self.tuning.minimum_overlap:
                 continue
             # The exact-match shortcut is checked *after* the guard and
@@ -691,12 +825,27 @@ class Index:
             # object that no substantive word was shared.
             if asked == phrase_tokens:
                 return 1.0
-            shared = query_tokens & phrase_tokens
+            # Content decides a content question. Stopwords stay in the
+            # comparison only for a query that has nothing else, which is
+            # what the arrangement-is-the-signal case needs.
+            #
+            # They carry real weight in a small index — "how" and "do" score
+            # 0.66 and 0.60 against twenty-five entries — so including them
+            # let a shared *form* outrank a shared subject. Measured: "how do
+            # standups work for you" scored 0.669 against "How do you
+            # estimate work?" on {how, do, you, work}, beating the agile
+            # entry's 0.637 on "standup" alone — and "standup" is an alias of
+            # the agile entry and carries twice the weight of "work".
+            if content_tokens:
+                query_side, phrase_side = query_content, phrase_content
+                side_mass = phrase_mass
+            else:
+                query_side, phrase_side = query_tokens, phrase_tokens
+                side_mass = None
+            shared = query_side & phrase_side
             if shared:
                 best = max(
                     best,
-                    self._weighted_dice(
-                        shared, query_tokens, phrase_tokens, query_mass, phrase_mass
-                    ),
+                    self._weighted_dice(shared, query_side, phrase_side, query_mass, side_mass),
                 )
         return best

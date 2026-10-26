@@ -74,7 +74,7 @@ normalize("What is your Notice Period?")      # ['notice', 'period']
 query_terms("What is your notice period?")    # ['notice', 'period']
 ```
 
-Case folded, punctuation dropped, and 77 stopwords removed — so *"what is
+Case folded, punctuation dropped, and 109 stopwords removed — so *"what is
 your"* contributes nothing and cannot make two unrelated questions look
 similar. `normalize(text, keep_stopwords=True)` keeps them, for a caller who
 needs the whole token stream.

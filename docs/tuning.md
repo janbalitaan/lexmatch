@@ -48,11 +48,11 @@ share before the phrase scorer will consider them related at all. Raise it to
 2 for an index whose entries share a lot of vocabulary.
 
 With four entries all beginning *"What is your rate for…"*, a query of
-*"what is your rate for consulting"* scores 0.446 at the default and 0.084 at
+*"what is your rate for consulting"* scores 0.139 at the default and 0.084 at
 2, because sharing one diluted word is not enough to be sure:
 
 ```
-minimum_overlap=1   0.446
+minimum_overlap=1   0.139
 minimum_overlap=2   0.084
 ```
 
@@ -114,9 +114,9 @@ as "my questions are worded badly" rather than as a configuration error.
 index.tuning.describe()
 # threshold 0.45, saturation 1.4, length penalty 0.72
 # minimum overlap 1, ambiguity margin 0.05, ambiguity floor 0.5
-# 77 stopwords, 0 synonyms, typo correction at 0.8 similarity
-# 4 characters and up
+# unknown word cost 0.0, stemming on, 109 stopwords, 0 synonyms
+# typo correction at 0.8 similarity, 4 characters and up
 ```
 
-Counts the stopwords rather than listing them — seventy-seven words in a log
+Counts the stopwords rather than listing them — a hundred and nine words in a log
 line is noise.

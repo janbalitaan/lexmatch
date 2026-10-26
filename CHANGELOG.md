@@ -10,6 +10,53 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- **Inflections fold onto one token.** "consulting" and "consult" were
+  different words, and so were "built" and "build", "rates" and "rate". The
+  documentation said an alias was cheaper and exact, which holds for twenty
+  entries and stops holding at the scale a support index runs at — nobody
+  hand-writes aliases for every tense across four hundred entries, and the
+  ones they forget are the ones that fail. Measured across 133 questions from
+  thirty-seven simulated askers: **76.7% to 85.0%**, with confidently wrong
+  answers falling from fourteen to three.
+
+  Only inflection folds. This is not a Porter stemmer: Porter strips
+  derivational suffixes too, which merges "university" and "universe" into one
+  token. `Tuning.with_stemmer(None)` turns it off and any callable replaces
+  it, and `Stemmer.IRREGULAR`, `KEEP` and `SUFFIXES` are all replaceable.
+- **Content decides a content question.** Phrase overlap counted shared
+  stopwords, which carry real weight in a small index — "how" and "do" score
+  0.66 and 0.60 against twenty-five entries — so a shared question *form*
+  outranked a shared subject. "how do standups work for you" scored 0.669
+  against "How do you estimate work?" on {how, do, you, work}, beating the
+  agile entry's 0.637 on "standup", which is that entry's own alias and
+  carries twice the weight. Stopwords now count only for a query that has
+  nothing else, which is the case they were kept for.
+- **A message asking two things is no longer called ambiguous.** Ambiguity is
+  one question matching two entries; "yoe and tech stack?" is two questions
+  matching one each, and asking which was meant answers neither. `reply()`
+  scored the whole string and never consulted the split, so it disagreed with
+  `answers()` about the same message. A greeting in front of a question no
+  longer becomes the answer, either: the substantive part leads.
+- **Thirty-two question-form stopwords.** "think", "handle", "approach",
+  "consider" and the rest of the verbs and hedges a question is built from.
+  They were absent, and in a question set small enough to hand write they are
+  *rare*, so the weighting treated them as the most discriminating words in
+  the index. Words that look like this but are deliberately not included:
+  "work", "manage", "build", "design", "process" — those are the subject of
+  real questions.
+- `Tuning.unknown_word_cost`, **off by default**. An unknown word has no
+  weight, so it is invisible, and a query is satisfiable by matching only the
+  words it shares. Two ways of charging for it were implemented and measured;
+  both made the library worse (82.7% and 69.9% against 85.0%), because in a
+  small question set most words in a natural question are absent from every
+  entry, so charging for an unknown word charges for natural phrasing. Kept
+  for a deliberately narrow index where a refusal beats a guess.
+- A reply against 5000 entries costs 17.8 ms on the default path, unchanged by
+  any of the above. Three things were moved to build time to keep it there:
+  the stemmer is memoized, each phrase's content and weight are computed once,
+  and the compound reading is skipped unless the splitter says the message
+  could be compound — that last one alone had doubled the cost, because
+  reading a single question scored every entry two or three times.
 - Two more scoring defects, found by simulating eleven professional roles —
   technical and non-technical recruiters, developers, senior developers,
   architects, product owners, scrum masters, engineering managers, a CEO, a

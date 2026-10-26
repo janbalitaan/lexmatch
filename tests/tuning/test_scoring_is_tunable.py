@@ -22,6 +22,7 @@ from lexmatch.constants import (
 )
 from lexmatch.exceptions import TuningError
 from lexmatch.models.tuning import Tuning
+from lexmatch.stemming import Stemmer
 from lexmatch.stopwords import STOPWORDS
 
 ENTRIES = [
@@ -109,8 +110,11 @@ class TestTheOverlapGuardIsNowRead:
         # 0.446 with the guard at 1, which is a hair under the 0.45 default
         # now that phrase overlap is IDF-weighted. The threshold is lowered
         # so this test turns on the guard rather than on the threshold.
-        loose = Index(DILUTED, tuning=Tuning(minimum_overlap=1), threshold=0.2)
-        strict = Index(DILUTED, tuning=Tuning(minimum_overlap=2), threshold=0.2)
+        # 0.139 with the guard at 1 and 0.084 at 2, both low because every
+        # word these entries share is in all of them. The threshold is set
+        # between the two so the guard is what decides.
+        loose = Index(DILUTED, tuning=Tuning(minimum_overlap=1), threshold=0.1)
+        strict = Index(DILUTED, tuning=Tuning(minimum_overlap=2), threshold=0.1)
         assert loose.answer(query)[0] is not None
         assert strict.answer(query)[0] is None
 
@@ -128,11 +132,15 @@ class TestTheOverlapGuardIsNowRead:
         strict = Index(entries, tuning=Tuning(minimum_overlap=2))
         # `score` prepares these once per query; the unit takes them ready
         # so the guard can be exercised without the whole pass.
-        asked = {"notice", "of", "termination"}
-        content = asked - loose.tuning.stopwords
-        mass = sum(loose._inverse_document_frequency.get(token, 0.0) for token in asked)
-        assert loose._phrase_score(0, asked, content, asked, mass) > 0
-        assert strict._phrase_score(0, asked, content, asked, mass) == 0
+        # Stemmed by hand, because the index stems what it holds and these
+        # are being handed straight to the scorer: "notice" is "notic" there.
+        # One shared content word, which is what the guard counts. "start"
+        # would share a second and make both settings pass.
+        asked = set(Stemmer.stem_all(["notice", "of", "termination"]))
+        # The folded stopword set, because the tokens above are folded too.
+        content = asked - loose._stopwords
+        assert loose._phrase_score(0, asked, content, asked) > 0
+        assert strict._phrase_score(0, asked, content, asked) == 0
 
     def test_zero_lets_a_query_match_on_filler(self):
         index = Index(DILUTED, tuning=Tuning(minimum_overlap=0))
@@ -227,3 +235,71 @@ class TestDescribe:
     def test_it_does_not_list_them(self):
         """Safe to log: seventy-seven words in a log line is noise."""
         assert "what" not in Tuning().describe()
+
+
+class TestTheUnknownWordCost:
+    """Off by default, and measured twice before it was left off.
+
+    An unknown word has no inverse document frequency, so it contributes
+    nothing to the score ceiling and is invisible — which leaves a query
+    satisfiable by matching only the words it happened to share. Charging
+    for it nonetheless made the library worse across 133 measured questions,
+    because in a question set small enough to hand write, most words in a
+    naturally phrased question are absent from every entry.
+    """
+
+    SPARSE: ClassVar[list[Entry]] = [
+        Entry(question="Are you open to remote work?", answer="REMOTE", aliases=["remote"]),
+        Entry(question="What is your notice period?", answer="NOTICE", aliases=["notice"]),
+        Entry(question="What are your rates?", answer="RATE", aliases=["rate"]),
+    ]
+    #: One known content word, one the index has never seen.
+    HALF_KNOWN = "do you like working alone"
+
+    def test_it_is_off_by_default(self):
+        assert Tuning().unknown_word_cost == 0.0
+
+    def test_off_the_query_is_answered_on_its_known_word(self):
+        """The documented cost of leaving it off."""
+        assert Index(self.SPARSE).reply(self.HALF_KNOWN).answered
+
+    def test_raising_it_lowers_the_score(self):
+        loose = Index(self.SPARSE)
+        strict = Index(self.SPARSE, tuning=Tuning(unknown_word_cost=1.0))
+        assert strict.score(self.HALF_KNOWN)[0][0] < loose.score(self.HALF_KNOWN)[0][0]
+
+    def test_a_fully_recognized_query_is_unaffected(self):
+        loose = Index(self.SPARSE)
+        strict = Index(self.SPARSE, tuning=Tuning(unknown_word_cost=1.0))
+        for query in ("remote work", "notice period", "rate"):
+            assert strict.score(query)[0][0] == loose.score(query)[0][0], query
+
+    def test_a_cost_outside_zero_to_one_is_refused(self):
+        with pytest.raises(TuningError, match="between 0 and 1"):
+            Tuning(unknown_word_cost=1.5)
+
+
+class TestTheStemmerIsReplaceable:
+    FORMS: ClassVar[list[Entry]] = [
+        Entry(question="Do you do consulting?", answer="CONSULTING", aliases=["consulting"]),
+        Entry(question="What is your notice period?", answer="NOTICE", aliases=["notice"]),
+    ]
+
+    def test_it_is_on_by_default(self):
+        """So "do you consult" reaches the consulting entry."""
+        assert Index(self.FORMS).reply("do you consult").entry.answer == "CONSULTING"
+
+    def test_none_matches_exact_word_forms_only(self):
+        exact = Index(self.FORMS, tuning=Tuning().with_stemmer(None))
+        assert not exact.reply("do you consult").answered
+        assert exact.reply("consulting").answered
+
+    def test_a_replacement_is_used(self):
+        """Any callable from a word to a token, so a Snowball stemmer or a
+        lemmatizer drops in."""
+        shouty = Index(self.FORMS, tuning=Tuning().with_stemmer(str.upper))
+        assert shouty.reply("CONSULTING").answered
+
+    def test_describe_says_which(self):
+        assert "stemming on" in Tuning().describe()
+        assert "stemming off" in Tuning().with_stemmer(None).describe()

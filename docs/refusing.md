@@ -27,8 +27,8 @@ the assumption that anything else on the page is right.
 ```
 'remote'                      1.000   answered
 'how soon can you start'      0.952   answered
-'do you like working alone'   0.000   refused
-'what is the weather'         0.000   refused
+'what is the capital of france'  0.000   refused
+'do you enjoy cooking'        0.000   refused
 ''                            0.000   refused
 ```
 
@@ -36,6 +36,13 @@ Note the shape: a match is usually *well* above the 0.45 threshold and a
 non-match is usually zero, not 0.3. Scores cluster at the ends because both
 measures need a substantive word in common before they report anything at
 all. The threshold is there for the narrow middle, not to split a continuum.
+
+That clustering is also what the refusals depend on, and it has a cost at
+the edge. *"do you like working alone"* scores **1.000** against *"Are you
+open to remote work?"*, because "working" folds to "work" and "alone" is a
+word this index has never seen — so the only content word left is one they
+share. `limitations.md` has the two measured attempts at charging for an
+unknown word, and why neither is the default.
 
 ## Choosing the threshold
 

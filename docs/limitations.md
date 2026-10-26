@@ -33,7 +33,7 @@ FAQ.
 
 ## One language's worth of stopwords
 
-The 77 shipped stopwords are English. For another language the list is wrong
+The 109 shipped stopwords are English. For another language the list is wrong
 in both directions — it removes nothing it should and keeps everything it
 should not:
 
@@ -45,15 +45,55 @@ Replacing the list is a one-liner, but somebody has to write it. There is no
 language detection here and none planned: guessing wrong would silently
 change what every query matches.
 
-## No stemming
+## Stemming folds inflection, not meaning
 
-*"consulting"* and *"consultant"* are different tokens. A query using one
-will not match an entry using the other unless an alias bridges them.
+*"consulting"* and *"consult"* fold together; *"consultant"* does not, and
+nor does *"payment"* with *"pay"*. Only inflectional endings are stripped,
+because the derivational ones Porter also strips merge words that mean
+different things — "university" and "universe" both become `univers`.
 
-Deliberate rather than missing. A stemmer is another dependency and another
-source of surprise — Porter stemming turns "university" and "universe" into
-the same token — and for a question set you control, an alias is both cheaper
-and exact.
+The cost of folding at all is a class of false match that exact forms would
+have refused:
+
+```
+'do you like working alone'  ->  "Are you open to remote work?"  1.000
+```
+
+Measured net across 133 questions: 76.7% to 85.0%, with confidently wrong
+answers falling from fourteen to three. `stemming.md` has the rules and how
+to replace or disable them.
+
+## An unknown word is invisible, and charging for it costs more
+
+A word the index has never seen has no inverse document frequency, so it
+contributes nothing to the score ceiling. A query is therefore satisfiable by
+matching only the words it happens to share, however much of the question
+was not understood:
+
+```
+'do you like working alone'           1.000   on "work" alone
+'what dashboards do you build'        1.000   on "build" alone
+'would you be a technical cofounder'  1.000   on "technical" alone
+```
+
+Two ways of charging for it were implemented and measured against 133
+questions:
+
+```
+ignoring unknown words (the default)              85.0%
+a linear cost on the unrecognized fraction        82.7%
+counting them at a zero-document frequency,
+which is the highest weight the formula gives     69.9%
+```
+
+Both are worse, and the reason is structural: in a question set small enough
+to hand write, most words in a naturally phrased question are absent from
+every entry — they are conversational, not substantive. Charging for an
+unknown word charges for natural phrasing.
+
+`Tuning.unknown_word_cost` is kept for the case where the trade runs the
+other way: a deliberately narrow index where most of what it is asked is out
+of scope, and a refusal is better than a guess.
 
 ## One shared word can carry a wrong match
 

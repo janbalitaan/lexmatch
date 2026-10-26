@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 
 from lexmatch.constants import (
@@ -12,10 +12,12 @@ from lexmatch.constants import (
     LENGTH_PENALTY,
     MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION,
+    UNKNOWN_WORD_COST,
 )
 from lexmatch.exceptions import TuningError
 from lexmatch.models.corrections import Corrections
 from lexmatch.models.synonyms import Synonyms
+from lexmatch.stemming import Stemmer
 from lexmatch.stopwords import STOPWORDS
 
 
@@ -44,6 +46,8 @@ class Tuning:
     minimum_overlap: int = MIN_CONTENT_OVERLAP
     ambiguity_margin: float = AMBIGUITY_MARGIN
     ambiguity_floor: float = AMBIGUITY_FLOOR
+    unknown_word_cost: float = UNKNOWN_WORD_COST
+    stemmer: Callable[[str], str] | None = Stemmer.stem
     stopwords: frozenset[str] = STOPWORDS
     synonyms: Synonyms = field(default_factory=Synonyms)
     corrections: Corrections = field(default_factory=Corrections)
@@ -73,6 +77,11 @@ class Tuning:
                 f"{self.ambiguity_margin}); 0 means only an exact tie counts "
                 "as ambiguous"
             )
+        if not 0.0 <= self.unknown_word_cost <= 1.0:
+            raise TuningError(
+                f"unknown_word_cost has to be between 0 and 1 (got "
+                f"{self.unknown_word_cost}); it scales a normalized score"
+            )
         if not 0.0 <= self.ambiguity_floor <= 1.0:
             raise TuningError(
                 f"ambiguity_floor has to be between 0 and 1 (got "
@@ -84,6 +93,25 @@ class Tuning:
                 f"minimum_overlap cannot be negative (got {self.minimum_overlap}); "
                 "0 lets a query match on stopwords alone"
             )
+
+    def fold(self, words: list[str]) -> list[str]:
+        """Apply the stemmer, or return the words untouched without one.
+
+        Called on both the index and the query, so the two always agree. A
+        stem is never displayed, so it does not have to be a word — it has to
+        be the same for every inflection, which is what `Stemmer` provides.
+        """
+        if self.stemmer is None:
+            return words
+        return [self.stemmer(word) for word in words]
+
+    def with_stemmer(self, stemmer: Callable[[str], str] | None) -> Tuning:
+        """Replace the stemmer, or pass None to match exact word forms only.
+
+        Tuning().with_stemmer(None)                 # no folding
+        Tuning().with_stemmer(SnowballStemmer().stem)
+        """
+        return replace(self, stemmer=stemmer)
 
     def with_threshold(self, threshold: float) -> Tuning:
         """Return tuning that answers more or less readily.
@@ -182,6 +210,8 @@ class Tuning:
             f"minimum overlap {self.minimum_overlap}, "
             f"ambiguity margin {self.ambiguity_margin}, "
             f"ambiguity floor {self.ambiguity_floor}, "
+            f"unknown word cost {self.unknown_word_cost}, "
+            f"{'stemming on' if self.stemmer else 'stemming off'}, "
             f"{len(self.stopwords)} stopwords, {self.synonyms.describe()}, "
             f"{self.corrections.describe()}"
         )

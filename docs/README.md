@@ -11,6 +11,7 @@
 | [Synonyms](synonyms.md) | A word that means the same thing index-wide. |
 | [Compound questions](compound-questions.md) | A message that asks more than one thing. |
 | [Typos](typos.md) | Reading a word somebody mistyped. |
+| [Stemming](stemming.md) | Folding plurals and tenses onto one token. |
 | [Small talk](small-talk.md) | Hello, thanks, who are you. |
 | [Tuning](tuning.md) | Every constant, what it does, and when to move it. |
 | [API reference](api.md) | Everything importable. Nothing else is public. |

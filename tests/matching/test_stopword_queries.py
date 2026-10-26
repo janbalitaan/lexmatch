@@ -75,7 +75,7 @@ class TestPhraseScoringEdges:
         once per entry, so the empty case is passed in rather than derived.
         """
         index = Index(entries)
-        assert index._phrase_score(0, set(), set(), set(), 0.0) == 0.0
+        assert index._phrase_score(0, set(), set(), set()) == 0.0
 
     def test_a_query_of_only_punctuation_is_refused(self, entries):
         """Through the public API it is refused before scoring."""

@@ -110,7 +110,8 @@ class TestTheWorkedExamplesRun:
         expected = {
             "remote": (1.000, True),
             "how soon can you start": (0.952, True),
-            "do you like working alone": (0.000, False),
+            "what is the capital of france": (0.000, False),
+            "do you enjoy cooking": (0.000, False),
             "what is the weather": (0.000, False),
             "": (0.000, False),
         }
@@ -149,7 +150,7 @@ class TestTheWorkedExamplesRun:
         query = "what is your rate for consulting"
         loose = Index(entries, tuning=Tuning(minimum_overlap=1))
         strict = Index(entries, tuning=Tuning(minimum_overlap=2))
-        assert abs(loose.score(query)[0][0] - 0.446) < 0.001
+        assert abs(loose.score(query)[0][0] - 0.139) < 0.001
         assert abs(strict.score(query)[0][0] - 0.084) < 0.001
         # Both are refused at the default threshold, which the doc now says
         # outright. It used to claim the loose one was answered, which was

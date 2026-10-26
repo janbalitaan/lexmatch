@@ -99,8 +99,19 @@ class QuestionSplitter:
 
     @classmethod
     def looks_compound(cls, message: str) -> bool:
-        """Whether this message asks more than one thing."""
-        return len(cls.split(message)) > 1
+        """Whether this message might ask more than one thing.
+
+        True when *either* split finds more than one part. It used to consult
+        only the strict split, which reads "yoe and tech stack?" as one
+        question — the loose split is the one that separates on "and", and
+        that message is exactly the kind this is asked about.
+
+        Deliberately generous, because its job is to decide whether the
+        expensive reading is worth running: a false positive costs a scoring
+        pass, and a false negative means a compound message is answered as
+        though it asked one thing.
+        """
+        return len(cls.split(message)) > 1 or len(cls.split_loosely(message)) > 1
 
     #: Words that acknowledge rather than ask. Splitting "great, thanks!"
     #: yields "great" and "thanks"; the second is answerable and the first is
