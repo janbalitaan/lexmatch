@@ -10,6 +10,11 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Every parser takes `strict`, defaulting to true. A file loaded once at
+  startup should say what is wrong with it; a file being edited while it is
+  served should keep answering while its owner is halfway through the next
+  question. The second case came out of integrating the library into a
+  consumer that had been skipping unreadable entries for exactly that reason.
 - `MarkdownParser` accepts the blockquote convention as well as the italic
   one, and a named `Tags:` line as well as `#hashtags`. Both are how people
   write a note to the reader, and accepting only one makes the other a

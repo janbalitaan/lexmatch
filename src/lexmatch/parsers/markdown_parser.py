@@ -54,8 +54,19 @@ class MarkdownParser:
     _TAGS: ClassVar[re.Pattern[str]] = re.compile(r"^\s*(#\w[\w-]*(?:\s+#\w[\w-]*)*)\s*$")
 
     @classmethod
-    def parse(cls, text: str) -> list[Entry]:
-        """Build entries from Markdown text."""
+    def parse(cls, text: str, strict: bool = True) -> list[Entry]:
+        """Build entries from Markdown text.
+
+        `strict=False` skips an entry that cannot be built instead of
+        raising. That is for a file somebody is editing *now*: a question set
+        reloaded on change should keep answering while the owner is halfway
+        through adding the next question, and a heading with nothing under it
+        yet is what halfway looks like.
+
+        The default raises, because a file loaded once at startup should say
+        what is wrong with it rather than quietly hold fewer answers than it
+        appears to.
+        """
         heading = re.compile(rf"^#{{{cls.LEVEL}}}\s+(?P<question>.+?)\s*$", re.MULTILINE)
         matches = list(heading.finditer(text))
         if not matches:
@@ -68,17 +79,21 @@ class MarkdownParser:
             ends = matches[position + 1].start() if position + 1 < len(matches) else len(text)
             body = text[match.end() : ends]
             line = text.count("\n", 0, match.start()) + 1
-            entries.append(cls._entry_from(match.group("question"), body, line))
+            try:
+                entries.append(cls._entry_from(match.group("question"), body, line))
+            except ParseError:
+                if strict:
+                    raise
         return entries
 
     @classmethod
-    def read(cls, path: Path | str) -> list[Entry]:
+    def read(cls, path: Path | str, strict: bool = True) -> list[Entry]:
         """Build entries from a Markdown file."""
         try:
             text = Path(path).read_text(encoding="utf-8")
         except OSError as error:
             raise ParseError(f"cannot read {path}: {error.strerror}") from error
-        return cls.parse(text)
+        return cls.parse(text, strict=strict)
 
     @classmethod
     def _entry_from(cls, question: str, body: str, line: int) -> Entry:

@@ -36,20 +36,25 @@ class JsonParser:
     WRAPPERS: ClassVar[tuple[str, ...]] = ("entries", "questions", "faq", "items", "data")
 
     @classmethod
-    def parse(cls, text: str) -> list[Entry]:
-        """Build entries from JSON text."""
+    def parse(cls, text: str, strict: bool = True) -> list[Entry]:
+        """Build entries from JSON text.
+
+        `strict=False` skips an entry that cannot be built instead of
+        raising, for a file being edited while it is served. A malformed
+        document is always an error, because then there is nothing to skip.
+        """
         try:
             loaded = json.loads(text)
         except json.JSONDecodeError as error:
             raise ParseError(
                 f"not valid JSON: {error.msg} at line {error.lineno}, column {error.colno}"
             ) from error
-        return cls._entries_from(cls._unwrap(loaded))
+        return cls._entries_from(cls._unwrap(loaded), strict=strict)
 
     @classmethod
-    def read(cls, path: Path | str) -> list[Entry]:
+    def read(cls, path: Path | str, strict: bool = True) -> list[Entry]:
         """Build entries from a JSON file."""
-        return cls.parse(_read_text(path))
+        return cls.parse(_read_text(path), strict=strict)
 
     @classmethod
     def _unwrap(cls, loaded: Any) -> list[Any]:
@@ -71,12 +76,18 @@ class JsonParser:
         )
 
     @classmethod
-    def _entries_from(cls, rows: list[Any]) -> list[Entry]:
+    def _entries_from(cls, rows: list[Any], strict: bool = True) -> list[Entry]:
         entries: list[Entry] = []
         for position, row in enumerate(rows):
-            if not isinstance(row, dict):
-                raise ParseError(f"entry {position} is a {type(row).__name__}, not an object")
-            entries.append(cls._entry_from(row, position))
+            try:
+                if not isinstance(row, dict):
+                    raise ParseError(
+                        f"entry {position} is a {type(row).__name__}, not an object"
+                    )
+                entries.append(cls._entry_from(row, position))
+            except ParseError:
+                if strict:
+                    raise
         return entries
 
     @classmethod

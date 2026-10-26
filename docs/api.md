@@ -211,16 +211,18 @@ a message as one question or several.
 ## Reading a question set from a file
 
 ```python
-JsonParser.read(path) -> list[Entry]
-JsonParser.parse(text) -> list[Entry]
-CsvParser.read(path) -> list[Entry]
-CsvParser.parse(text) -> list[Entry]
-MarkdownParser.read(path) -> list[Entry]
-MarkdownParser.parse(text) -> list[Entry]
+JsonParser.read(path, strict=True) -> list[Entry]
+JsonParser.parse(text, strict=True) -> list[Entry]
+CsvParser.read(path, strict=True) -> list[Entry]
+CsvParser.parse(text, strict=True) -> list[Entry]
+MarkdownParser.read(path, strict=True) -> list[Entry]
+MarkdownParser.parse(text, strict=True) -> list[Entry]
 ```
 
 A question set is content, and content belongs to whoever writes the answers.
 Each parser raises `ParseError` naming the line, row or key at fault.
+`strict=False` skips an entry that cannot be built instead, for a file being
+edited while it is served.
 
 ```python
 index = Index(CsvParser.read("faq.csv"))

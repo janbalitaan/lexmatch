@@ -106,6 +106,27 @@ no level-2 headings found, so there are no questions
 A question set is usually long and often generated, so "something is wrong
 with your file" costs whoever owns it an afternoon.
 
+## A file somebody is editing
+
+Every parser takes `strict`, which defaults to true:
+
+```python
+entries = MarkdownParser.read("answers.md")                 # raises
+entries = MarkdownParser.read("answers.md", strict=False)   # skips
+```
+
+Strict is right for a file loaded once at startup — it should say what is
+wrong rather than quietly hold fewer answers than it appears to.
+
+It is wrong for a file being edited while it is served. A question set
+reloaded on change should keep answering while its owner is halfway through
+adding the next question, and a heading with nothing under it yet is what
+halfway looks like. Raising there takes a working bot down over an unfinished
+sentence.
+
+What is always an error is something there is no way to skip past: JSON that
+is not JSON, a CSV with no usable header, a Markdown page with no headings.
+
 ## What an entry must have
 
 `Entry` refuses a blank question or a blank answer when it is built, rather

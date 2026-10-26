@@ -36,8 +36,13 @@ class CsvParser:
     SEPARATOR: ClassVar[str] = ";"
 
     @classmethod
-    def parse(cls, text: str) -> list[Entry]:
-        """Build entries from CSV text."""
+    def parse(cls, text: str, strict: bool = True) -> list[Entry]:
+        """Build entries from CSV text.
+
+        `strict=False` skips a row that cannot be built instead of raising,
+        for a file being edited while it is served. A missing header is
+        always an error, because then there is nothing to read rows with.
+        """
         reader = csv.DictReader(io.StringIO(text))
         if reader.fieldnames is None:
             raise ParseError("the file is empty, so it has no header row")
@@ -53,17 +58,21 @@ class CsvParser:
         for line, row in enumerate(reader, start=2):
             if not any((value or "").strip() for value in row.values()):
                 continue
-            entries.append(cls._entry_from(row, columns, line))
+            try:
+                entries.append(cls._entry_from(row, columns, line))
+            except ParseError:
+                if strict:
+                    raise
         return entries
 
     @classmethod
-    def read(cls, path: Path | str) -> list[Entry]:
+    def read(cls, path: Path | str, strict: bool = True) -> list[Entry]:
         """Build entries from a CSV file."""
         try:
             text = Path(path).read_text(encoding="utf-8-sig")
         except OSError as error:
             raise ParseError(f"cannot read {path}: {error.strerror}") from error
-        return cls.parse(text)
+        return cls.parse(text, strict=strict)
 
     @classmethod
     def _columns(cls, fieldnames: Sequence[str]) -> dict[str, str]:
