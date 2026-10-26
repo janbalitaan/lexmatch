@@ -58,3 +58,22 @@ CORRECTION_MINIMUM_LENGTH = 4
 # confident wrong answer half the time, and the visitor cannot tell which
 # half they got.
 AMBIGUITY_MARGIN = 0.05
+
+# The score a contender has to reach before a tie counts as ambiguity rather
+# than as two weak guesses.
+#
+# A tie is only worth asking about when both candidates are confidently
+# matched. Measured over thirty simulated visitors, "what is your rate"
+# tied at 0.727 against two rate entries and asking which was meant was
+# exactly right — while "what do you work on" tied at 0.537 against "Are you
+# open to remote work" and "Do you need visa sponsorship", on the word "work"
+# plus filler, and the clarifying question was nonsense.
+#
+# Below the floor the tie is reported as unanswered with the contenders as
+# suggestions, which is honest: four candidates at 0.5 mean the question was
+# not understood, and letting the visitor choose beats a one-in-four guess.
+AMBIGUITY_FLOOR = 0.65
+
+# How many alternatives to offer for a genuine ambiguity. Two is a question;
+# five is a menu, and a menu is what `suggestions` is for.
+AMBIGUITY_ALTERNATIVES = 3

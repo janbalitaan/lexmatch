@@ -4,6 +4,15 @@ from __future__ import annotations
 
 import re
 
+# A fragment this short or shorter is not a question. One character cannot
+# be one, and splitting on a full stop makes them: "e.g." becomes "e" and
+# "g", which would otherwise be reported back as two questions nobody asked.
+#
+# Measured in characters rather than words on purpose — "remote?" is one
+# word and a perfectly good question, which an earlier word-based rule
+# folded into its neighbour and turned "remote? rates?" into "remote rates".
+_SHORTEST_QUESTION = 1
+
 
 class QuestionSplitter:
     """Separates a message that asks more than one thing.
@@ -30,7 +39,16 @@ class QuestionSplitter:
     # when what follows looks like another question rather than the rest of
     # this one — "rates and availability" is one question about two things,
     # while "what are your rates and when can you start" is two questions.
-    _TERMINATORS = re.compile(r"[?;\n]+")
+    # `?` `;` and a newline end a question. `!` and `.` end a *sentence*,
+    # which is how a greeting arrives attached to one: "Hi! Quick one — YOE
+    # and CTC?" quoted the whole thing back as unanswered because none of it
+    # was a separator. An em or en dash is used the same way in a hurried
+    # message.
+    #
+    # A full stop is included despite the risk to "e.g." and "Mr." — a
+    # question with either is rare, and a message with a full stop in the
+    # middle is almost always two sentences.
+    _TERMINATORS = re.compile(r"[?;!.\n]+|\s+[\u2014\u2013]\s+")
     # A comma, and a bare conjunction with no interrogative after it. Both
     # belong to the loose reading only: "whats your design rate, notice
     # period, and are you remote" is three questions in a list, while "Hello,
@@ -88,10 +106,12 @@ class QuestionSplitter:
     def _keep_usable(cls, parts: list[str]) -> list[str]:
         """Drop the empty fragments that splitting leaves behind.
 
-        Short ones are kept. An earlier version folded any single word into
-        its neighbour, on the theory that one word cannot carry a question —
-        and "remote? rates? notice period?" came back as two questions, the
-        first of them "remote rates", which means neither. A word before a
-        question mark is a question; the terminator already said so.
+        A single word is kept: "remote?" is a question and the terminator
+        already said so. An earlier version folded any single word into its
+        neighbour and turned "remote? rates? notice period?" into two
+        questions, the first of them "remote rates", which means neither.
+
+        A single *character* is dropped, because splitting on a full stop
+        makes them out of "e.g." and "U.S.".
         """
-        return [part.strip() for part in parts if part.strip()]
+        return [part.strip() for part in parts if len(part.strip()) > _SHORTEST_QUESTION]

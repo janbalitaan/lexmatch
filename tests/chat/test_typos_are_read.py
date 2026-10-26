@@ -43,26 +43,22 @@ class TestATypoIsAnswered:
         off = Index(ENTRIES, tuning=Tuning().with_corrections(enabled=False))
         assert off.answer(query)[0] is None
 
-    @pytest.mark.parametrize("query", ["notce period", "remte work"])
-    def test_a_partial_match_is_made_confident(self, query):
-        """Not every typo was refused outright. Both of these scraped just
-        over the threshold on one surviving word, so they answered by luck —
-        one more entry in the index would have sunk them. Correction turns a
-        lucky match into a certain one, which matters as much as rescuing
-        the outright refusals.
+    @pytest.mark.parametrize("query", ["whats your raets", "pricng", "availabilty", "remte"])
+    def test_a_refused_query_becomes_a_confident_one(self, query):
+        """From nothing to a clear match.
 
-        The improvement is asserted rather than the before-and-after
-        figures: IDF weighs a term by how rare it is *in this index*, so an
-        exact score is a property of the fixture and drifts with it. An
-        earlier version of this test hardcoded 0.553 from a two-entry index
-        and failed against a three-entry one.
+        An earlier version of this test used "notce period", on the grounds
+        that it scraped over the threshold on "period" alone and correction
+        made it certain. It no longer scrapes: once BM25 was normalized
+        against a *reachable* ceiling, one matching content word is already
+        confident, so the before-and-after is 0.000 to ~1.000 or nothing.
         """
         off = Index(ENTRIES, tuning=Tuning().with_corrections(enabled=False))
         on = Index(ENTRIES)
         before = off.score(query)[0][0]
         after = on.score(query)[0][0]
-        assert 0 < before < 0.55, f"{query!r} was not a marginal match: {before:.3f}"
-        assert after > before + 0.3, f"{query!r}: {before:.3f} -> {after:.3f}"
+        assert before == 0.0, f"{query!r} was not refused before: {before:.3f}"
+        assert after > 0.9, f"{query!r} is not confident after: {after:.3f}"
 
 
 class TestItNeverOverridesARealWord:

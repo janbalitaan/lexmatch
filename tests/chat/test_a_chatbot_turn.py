@@ -16,6 +16,8 @@ to tell which half they got.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from lexmatch import Entry, Index, Outcome, Reply, Tuning
@@ -224,3 +226,79 @@ class TestTheReplyItself:
         """It ends up in JSON more often than not."""
         assert Outcome.AMBIGUOUS == "ambiguous"
         assert f"{Outcome.ANSWERED.value}" == "answered"
+
+
+class TestAWeakTieIsNotAmbiguity:
+    """A tie among weak matches is a question that was not understood.
+
+    Measured over thirty simulated visitors: "what do you work on" tied at
+    0.537 against "Are you open to remote work" and "Do you need visa
+    sponsorship" — on the word "work" plus filler — and asking which was
+    meant read as nonsense. Genuine ambiguity, "what is your rate" against
+    two rate entries, sat at 0.727.
+
+    The margin is widened in these fixtures so a tie is guaranteed. Finding
+    a natural tie that also lands between the threshold and the floor means
+    tuning a fixture until two scores coincide, which tests the fixture
+    rather than the floor.
+    """
+
+    COMMON: ClassVar[list[Entry]] = [
+        Entry(question="Are you open to remote work?", answer="Yes.", aliases=["remote"]),
+        Entry(
+            question="Can you start work next month?", answer="Soon.", aliases=["availability"]
+        ),
+        Entry(question="Do you enjoy the work?", answer="Very much.", aliases=["enjoyment"]),
+        Entry(question="Is the work interesting?", answer="Usually.", aliases=["interest"]),
+    ]
+    #: Scores 0.571 — over the threshold, under the floor.
+    WEAK_TIE = "you work"
+
+    def _index(self, floor: float = 0.65) -> Index:
+        return Index(
+            self.COMMON,
+            tuning=Tuning(ambiguity_margin=0.2, ambiguity_floor=floor),
+        )
+
+    def test_the_query_is_in_the_window(self):
+        """Over the threshold, under the floor — stated so a drift in either
+        shows up here rather than as a confusing failure below."""
+        index = self._index()
+        score = index.score(self.WEAK_TIE)[0][0]
+        assert index.threshold <= score < index.tuning.ambiguity_floor
+
+    def test_there_is_more_than_one_contender(self):
+        assert len(self._index(floor=0.0).reply(self.WEAK_TIE).alternatives) > 1
+
+    def test_a_weak_tie_is_reported_as_unanswered(self):
+        assert self._index().reply(self.WEAK_TIE).outcome is Outcome.UNANSWERED
+
+    def test_the_contenders_are_offered_as_suggestions(self):
+        """So the visitor chooses rather than the index guessing."""
+        assert self._index().reply(self.WEAK_TIE).suggestions
+
+    def test_lowering_the_floor_makes_it_ambiguity_again(self):
+        assert self._index(floor=0.0).reply(self.WEAK_TIE).outcome is Outcome.AMBIGUOUS
+
+    def test_a_confident_tie_is_still_ambiguity(self):
+        confident = [
+            Entry(question="What is your rate for design work?", answer="£600."),
+            Entry(question="What is your rate for review work?", answer="£500."),
+        ]
+        reply = Index(confident).reply("what is your rate")
+        assert reply.outcome is Outcome.AMBIGUOUS
+        assert reply.score >= Index(confident).tuning.ambiguity_floor
+
+    def test_at_most_three_alternatives_are_offered(self):
+        """Two is a question; five is a menu, and a menu is what
+        `suggestions` is for."""
+        many = [
+            Entry(question=f"What is your rate for {kind} work?", answer="A.")
+            for kind in ("design", "review", "audit", "training", "advisory")
+        ]
+        reply = Index(many, tuning=Tuning(ambiguity_margin=0.9)).reply("what is your rate")
+        assert len(reply.alternatives) <= 3
+
+    def test_a_floor_outside_zero_to_one_is_refused(self):
+        with pytest.raises(TuningError, match="between 0 and 1"):
+            Tuning(ambiguity_floor=1.5)

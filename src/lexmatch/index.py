@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 
 from lexmatch.composer import Composer
+from lexmatch.constants import AMBIGUITY_ALTERNATIVES
 from lexmatch.models.entry import Entry
 from lexmatch.models.outcome import Outcome
 from lexmatch.models.reply import Reply
@@ -95,13 +96,20 @@ class Index:
         and 62 ms each; it is linear in entries either way, but with a
         constant nobody needed.
         """
-        tokens = self._prepare_query(query, keep_stopwords=False)
-        if not tokens or not self.entries:
+        asked = set(self._prepare_query(query))
+        if not asked or not self.entries:
             return []
-        unique = set(tokens)
-        ceiling = self._score_ceiling(unique)
-        asked = set(self._prepare_query(query, keep_stopwords=True))
         content = asked - self.tuning.stopwords
+        # BM25 sees the substantive words only. Stopwords appear in every
+        # entry and carry no IDF, exactly as `_phrase_score` documents — so
+        # ranking by them is ranking by noise. An earlier version fed BM25
+        # the unstripped query whenever stripping left nothing, and "who are
+        # you" scored 0.921 against "Are you open to remote work" once the
+        # ceiling became reachable, because filler was all there was to
+        # reach.
+        unique = content
+        ceiling = self._score_ceiling(unique)
+        specificity = self._specificity(unique)
         # For a query of nothing but stopwords the filler *is* the signal:
         # "who are you" and "what do you do" differ only in their filler, so
         # dropping an unknown word shrinks the denominator and pushes a
@@ -112,7 +120,7 @@ class Index:
         ranked = [
             (
                 max(
-                    self._bm25(position, unique, ceiling),
+                    self._bm25(position, unique, ceiling) * specificity,
                     self._phrase_score(position, comparable, content),
                 ),
                 entry,
@@ -172,11 +180,28 @@ class Index:
 
         contenders = self._contenders(ranked, best_score)
         if len(contenders) > 1:
+            if best_score < self.tuning.ambiguity_floor:
+                # A tie among weak matches is not ambiguity, it is a question
+                # that was not understood. Measured over thirty simulated
+                # visitors, "what do you work on" tied at 0.537 against "Are
+                # you open to remote work" and "Do you need visa
+                # sponsorship" — on the word "work" plus filler — and asking
+                # which was meant read as nonsense. Reported as unanswered
+                # with the contenders offered, which lets the visitor choose
+                # rather than taking a one-in-four guess.
+                return Reply(
+                    outcome=Outcome.UNANSWERED,
+                    score=best_score,
+                    suggestions=tuple(
+                        entry.question for entry in contenders[:AMBIGUITY_ALTERNATIVES]
+                    ),
+                )
+            offered = contenders[:AMBIGUITY_ALTERNATIVES]
             return Reply(
                 outcome=Outcome.AMBIGUOUS,
                 score=best_score,
-                alternatives=contenders,
-                suggestions=tuple(entry.question for entry in contenders),
+                alternatives=offered,
+                suggestions=tuple(entry.question for entry in offered),
             )
         return Reply(outcome=Outcome.ANSWERED, entry=best, score=best_score)
 
@@ -385,38 +410,91 @@ class Index:
         known = {token for token in tokens if token in self._vocabulary}
         return known or tokens
 
-    def _prepare_query(self, query: str, keep_stopwords: bool) -> list[str]:
-        """Turn raw text into the tokens scoring compares.
+    def _prepare_query(self, query: str) -> list[str]:
+        """Turn raw text into tokens, keeping the stopwords.
 
         The order is the whole of it, and getting it wrong is silent.
 
-        **Normalize keeping stopwords, then correct, then expand, then strip.**
-
-        Stripping first destroyed a phrase synonym made of stopwords: "how
-        much" is two stopwords, so `{"how much": "rate"}` never fired and
-        "how much do you charge" stayed unanswered — the exact paraphrase
-        that phrase keys exist for.
+        **Normalize keeping stopwords, then correct, then expand.** Stripping
+        first destroyed a phrase synonym made of stopwords: "how much" is two
+        stopwords, so `{"how much": "rate"}` never fired on "how much do you
+        charge" — the exact paraphrase phrase keys exist for.
 
         Correcting before expanding, because a mistyped short form has to
         become the short form first: the synonym map is keyed on "wfh", so
         "wfhh" expands to nothing if the order is reversed.
+
+        Stopwords are stripped by the caller rather than here, because the
+        two scorers want different sets — BM25 the substantive words, the
+        phrase scorer everything. It used to return a stripped list with a
+        fall-back to the unstripped one when stripping left nothing, and
+        that fall-back silently fed BM25 a query of pure filler.
         """
         words = normalize(query, keep_stopwords=True)
         corrected = self.tuning.corrections.apply(words, self._vocabulary)
-        expanded = self.tuning.synonyms.expand(corrected)
-        if keep_stopwords:
-            return expanded
-        stripped = [word for word in expanded if word not in self.tuning.stopwords]
-        # A query of nothing but stopwords — "what do you do?" — has every
-        # word removed, and the index holds stopwords too, so the unstripped
-        # form is the one that can still match.
-        return stripped or expanded
+        return self.tuning.synonyms.expand(corrected)
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
-        """Compute the best score this query could achieve, to scale to 0..1."""
+        """Compute the best score this query could achieve, to scale to 0..1.
+
+        Each term contributes **its own** maximum, not the index's. The
+        ceiling used to be `max_idf * number_of_terms`, which assumes every
+        query term is as rare as the rarest term in the index — so a common
+        word like "work" was counted at a weight it could never earn, and
+        the ceiling grew with each word while the achievable score did not.
+
+        Measured on a question whose discriminating word was present
+        throughout:
+
+            'advisory'                      1.000
+            'advisory work'                 0.512
+            'do you take on advisory work'  0.341
+
+        The same keyword, scoring worse the more naturally it was asked —
+        which is backwards, because people write sentences. Summing each
+        term's own ceiling makes the normalization reachable.
+
+        A term the index has never seen contributes nothing to either side,
+        so it neither helps nor penalizes.
+        """
         saturation = self.tuning.saturation
-        per_term = self._max_idf * (saturation + 1) / saturation
-        return per_term * len(unique_tokens) or 1.0
+        scale = (saturation + 1) / saturation
+        total = sum(
+            self._inverse_document_frequency.get(term, 0.0) * scale for term in unique_tokens
+        )
+        return total or 1.0
+
+    def _specificity(self, unique_tokens: set[str]) -> float:
+        """How confident any answer to this query is allowed to be.
+
+        BM25 is normalized against what the query could achieve, which is
+        the right scale and says nothing about whether the query was worth
+        asking. A query whose only content word is common matches 100% of
+        what was askable and still carries almost no information.
+
+        Measured in this index, where the rarest term scores 2.77:
+
+            'advisory'              2.77   as specific as anything gets
+            'what is your rate'     2.77
+            'overlap with EST'      2.77
+            'what do you work on'   1.31   one common word
+            'whats the weather'     0.00   nothing the index knows
+
+        Without this the third scored 1.000 against every entry containing
+        "work" and asked which of three unrelated questions was meant.
+        Scaling by the query's own informativeness puts it at 0.47 — over
+        the threshold, under the ambiguity floor, so the contenders are
+        offered rather than one being guessed at.
+
+        Capped at 1, so a long specific query is not rewarded twice.
+        """
+        mass = sum(self._inverse_document_frequency.get(term, 0.0) for term in unique_tokens)
+        if not unique_tokens or self._max_idf <= 0:
+            # No substantive words, or an index where every term is in every
+            # entry. Either way there is nothing for BM25 to be confident
+            # about, and the phrase scorer is what speaks for such a query.
+            return 0.0
+        return min(mass / self._max_idf, 1.0)
 
     def _bm25(self, position: int, unique_tokens: set[str], ceiling: float) -> float:
         counts = self._term_counts[position]

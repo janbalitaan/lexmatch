@@ -9,6 +9,8 @@ no error.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 from lexmatch import Entry, Index
@@ -58,20 +60,29 @@ class TestTheDefaultsChangeNothing:
 
 
 class TestTheThreshold:
-    # A weak but non-zero match, scoring 0.485 against this index. The
-    # earlier choice of "can I work remotely" stopped being weak once typo
-    # correction began reading "remotely" as "remote" and lifting it to
-    # 1.000 — which is the correction working, and makes it useless here.
-    WEAK = "the next thing"
+    # A weak but non-zero match. What counts as weak has changed twice:
+    # "can I work remotely" stopped being weak when typo correction read
+    # "remotely" as "remote", and "the next thing" stopped being weak when
+    # BM25 gained a reachable ceiling. Weak now means a *low-IDF* word —
+    # one appearing in several entries, which specificity scales down — so
+    # the fixture below has "work" in all three.
+    WEAK = "work"
+    WEAK_ENTRIES: ClassVar[list[Entry]] = [
+        Entry(question="Are you open to remote work?", answer="Yes.", aliases=["remote"]),
+        Entry(
+            question="Can you start work next month?", answer="Yes.", aliases=["availability"]
+        ),
+        Entry(question="Do you enjoy the work?", answer="Yes.", aliases=["enjoyment"]),
+    ]
 
     def test_raising_it_refuses_a_weak_match(self):
-        entry, score = Index(ENTRIES, threshold=0.9).answer(self.WEAK)
+        entry, score = Index(self.WEAK_ENTRIES, threshold=0.9).answer(self.WEAK)
         assert 0 < score < 0.9, f"{self.WEAK!r} scored {score:.3f}, not weak"
         assert entry is None
 
-    def test_the_default_accepts_it(self):
-        entry, score = Index(ENTRIES).answer(self.WEAK)
-        assert score >= Index(ENTRIES).threshold
+    def test_a_low_threshold_accepts_it(self):
+        entry, score = Index(self.WEAK_ENTRIES, threshold=0.2).answer(self.WEAK)
+        assert score >= 0.2
         assert entry is not None
 
     def test_above_one_refuses_everything(self):
@@ -81,7 +92,7 @@ class TestTheThreshold:
 
     def test_an_explicit_threshold_wins_over_the_tuning(self):
         """A caller who named it meant it."""
-        index = Index(ENTRIES, threshold=0.9, tuning=Tuning(threshold=0.1))
+        index = Index(self.WEAK_ENTRIES, threshold=0.9, tuning=Tuning(threshold=0.1))
         assert index.threshold == 0.9
         assert index.answer(self.WEAK)[0] is None
 

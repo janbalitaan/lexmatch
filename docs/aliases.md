@@ -18,7 +18,7 @@ The same entry, with and without:
 
 ```
 query                  no aliases        with aliases
-'work from home'       0.477  answered   1.000  answered
+'work from home'       0.955  answered   1.000  answered
 'wfh'                  0.000  refused    1.000  answered
 'distributed team'     0.000  refused    1.000  answered
 ```
@@ -27,10 +27,10 @@ query                  no aliases        with aliases
 threshold tuning reaches it, because there is nothing to score. An alias is
 the only thing that can.
 
-`work from home` was already answered without aliases, but at 0.477 against a
-0.45 threshold. One more entry in the index could have pushed it below.
-Aliases do not only rescue misses; they turn marginal matches into certain
-ones.
+`work from home` was already answered without aliases, because it shares
+three substantive words with the question. `wfh` shares none — no threshold
+reaches it, because there is nothing to score. An alias is the only thing
+that can.
 
 ## Writing them
 

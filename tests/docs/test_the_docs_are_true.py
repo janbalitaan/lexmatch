@@ -132,7 +132,7 @@ class TestTheWorkedExamplesRun:
             ]
         )
         expected = {
-            "work from home": (0.477, 1.000),
+            "work from home": (0.955, 1.000),
             "wfh": (0.000, 1.000),
             "distributed team": (0.000, 1.000),
         }
@@ -150,7 +150,7 @@ class TestTheWorkedExamplesRun:
         loose = Index(entries, tuning=Tuning(minimum_overlap=1))
         strict = Index(entries, tuning=Tuning(minimum_overlap=2))
         assert abs(loose.score(query)[0][0] - 0.833) < 0.001
-        assert abs(strict.score(query)[0][0] - 0.042) < 0.001
+        assert abs(strict.score(query)[0][0] - 0.084) < 0.001
         assert loose.answer(query)[0] is not None
         assert strict.answer(query)[0] is None
 

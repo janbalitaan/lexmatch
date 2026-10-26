@@ -10,6 +10,41 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Three scoring defects found by simulating twenty recruiters and ten
+  ordinary visitors against a realistic index — sixty-seven messages written
+  the way each kind of person actually writes.
+  - **A naturally phrased question scored worse than its keywords.** The
+    BM25 ceiling was `max_idf * number_of_terms`, which assumes every query
+    term is as rare as the rarest term in the index — so a common word was
+    counted at a weight it could never earn and the ceiling grew with each
+    word added. Measured: `advisory` 1.000, `advisory work` 0.512, `do you
+    take on advisory work` 0.341. The same keyword, scoring worse the more
+    naturally it was asked, which is backwards because people write
+    sentences. Each term now contributes its own ceiling.
+  - **A weak tie was reported as ambiguity.** "what do you work on" tied at
+    0.537 against "Are you open to remote work" and "Do you need visa
+    sponsorship" — on the word "work" plus filler — and the clarifying
+    question read as nonsense. Genuine ambiguity sat at 0.727.
+    `ambiguity_floor` is the score a tie has to reach before it is worth
+    asking about; below it the contenders are offered as suggestions, which
+    lets the visitor choose rather than taking a one-in-four guess.
+  - **A query's confidence ignored how specific it was.** BM25 is normalized
+    against what a query *could* achieve, which says nothing about whether
+    the query was worth asking: one common content word matches 100% of what
+    was askable and carries almost no information. Scaled by the query's own
+    IDF mass now, so an answer can only be as confident as the question was
+    specific.
+  - **BM25 was ranking stopword-only queries.** `_phrase_score` documents
+    that it cannot — "stopwords appear in every entry and carry no IDF" —
+    but the query preparation fell back to the unstripped tokens whenever
+    stripping left nothing, and fed them to BM25 anyway. Harmless while the
+    ceiling was unreachable; once it was reachable, "who are you" scored
+    0.921 against "Are you open to remote work" because filler was all there
+    was to reach.
+  - Also from the simulation: `!`, `.` and an em dash now separate questions,
+    so "Hi! Quick one — YOE and CTC?" is three parts rather than one quoted
+    back whole; and a one-character fragment is dropped, so "e.g." does not
+    become two questions nobody asked.
 - Two and a half times faster, from work that was being repeated rather than
   from any change to what is computed.
   - The query was normalized, typo-corrected and synonym-expanded inside
