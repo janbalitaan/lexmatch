@@ -40,6 +40,15 @@ class Synonyms:
 
     mapping: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: MappingProxyType({}))
 
+    @property
+    def longest_key(self) -> int:
+        """Return how many tokens the longest key spans.
+
+        Bounds the lookahead when scanning: a map of single words needs a
+        window of one, and a map holding "how much" needs two.
+        """
+        return max((len(key.split()) for key in self.mapping), default=1)
+
     @classmethod
     def of(cls, pairs: Mapping[str, str | Iterable[str]]) -> Synonyms:
         """Build from a plain dict, accepting a phrase or a list of words.
@@ -47,23 +56,25 @@ class Synonyms:
         `{"wfh": "work from home"}` and `{"wfh": ["work", "from", "home"]}`
         mean the same thing; the first is what anyone would write.
 
+        Keys may be phrases. `{"how much": "rate"}` is the point — a
+        paraphrase that shares no word with the question is the one thing
+        neither stopwords nor single-word synonyms can bridge, and "how much
+        do you charge" against "what is your rate" is the ordinary case.
+
+        An earlier version refused a multi-word key on the grounds that
+        expansion happened one token at a time. That was a statement about
+        the implementation rather than a constraint, and the implementation
+        changed.
+
         Keys are lower-cased, because matching happens on normalized tokens
         and a capitalized key would look like it worked while matching
-        nothing. A key of more than one word raises: expansion happens
-        token by token, so a multi-word *key* could never match and silently
-        doing nothing is worse than saying so.
+        nothing.
         """
         built: dict[str, tuple[str, ...]] = {}
         for word, expansion in pairs.items():
             key = word.strip().lower()
             if not key:
                 raise SynonymError("a synonym key cannot be empty")
-            if len(key.split()) > 1:
-                raise SynonymError(
-                    f"the synonym key {word!r} is more than one word. Expansion "
-                    "happens one token at a time, so a multi-word key can never "
-                    "match — put the phrase in the entry's aliases instead."
-                )
             words = expansion.split() if isinstance(expansion, str) else list(expansion)
             terms = tuple(term.strip().lower() for term in words if term.strip())
             if not terms:
@@ -76,16 +87,42 @@ class Synonyms:
     def expand(self, tokens: Iterable[str]) -> list[str]:
         """Return the tokens with every known synonym expanded in place.
 
-        The original token is kept alongside its expansion, so a short form
+        Phrases are matched **longest first**, so a map holding both
+        `"how much"` and `"much"` reads "how much" as the phrase rather than
+        stopping at the shorter key. Without that the longer entry could
+        never fire, which is the same silent failure as refusing it outright.
+
+        The original tokens are kept alongside the expansion, so a short form
         still matches an entry that uses the short form.
         """
         if not self.mapping:
             return list(tokens)
+        words = list(tokens)
+        longest = self.longest_key
         expanded: list[str] = []
-        for token in tokens:
-            expanded.append(token)
-            expanded.extend(self.mapping.get(token, ()))
+        position = 0
+        while position < len(words):
+            span, terms = self._match_at(words, position, longest)
+            expanded.extend(words[position : position + span])
+            expanded.extend(terms)
+            position += span
         return expanded
+
+    def _match_at(
+        self, words: list[str], position: int, longest: int
+    ) -> tuple[int, tuple[str, ...]]:
+        """Return how many tokens matched here, and what they expand to.
+
+        A span of 1 with no terms means nothing matched and the token passes
+        through — so the caller advances by one either way and the scan
+        cannot stall.
+        """
+        for span in range(min(longest, len(words) - position), 0, -1):
+            phrase = " ".join(words[position : position + span])
+            terms = self.mapping.get(phrase)
+            if terms is not None:
+                return span, terms
+        return 1, ()
 
     def with_pairs(self, pairs: Mapping[str, str | Iterable[str]]) -> Synonyms:
         """Return these synonyms plus more, the later ones winning."""

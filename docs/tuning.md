@@ -44,11 +44,11 @@ right when entries are questions and wrong when they are paragraphs.
 
 **`minimum_overlap`** — raise it to 2 for an index whose entries share a lot
 of vocabulary. With four entries all beginning *"What is your rate for…"*, a
-query of *"what is your rate for consulting"* scores 0.769 at the default and
+query of *"what is your rate for consulting"* scores 0.833 at the default and
 is refused at 2, because sharing one diluted word is not enough to be sure:
 
 ```
-minimum_overlap=1   0.769   answered
+minimum_overlap=1   0.833   answered
 minimum_overlap=2   0.042   refused
 ```
 

@@ -42,18 +42,31 @@ meets a long form in the entry whichever one was written short.
 `compensation` alone, so a query of `comp` still matches an entry that
 literally says "comp". Dropping it would trade one miss for another.
 
-**One token at a time.** A multi-word *key* can never match, so
-`{"work from home": "remote"}` raises rather than sitting in the map doing
-nothing:
+**Keys may be phrases**, and that is the point:
+
+```python
+Tuning().with_synonyms({
+    "how much": "rate",
+    "charge": "rate",
+    "bill": "rate",
+})
+```
+
+A paraphrase sharing no word with the question is the one thing neither
+stopwords nor single-word synonyms can bridge, and "how much do you charge"
+against "What is your rate" is the ordinary case. With those three declared:
 
 ```
-SynonymError: the synonym key 'work from home' is more than one word.
-Expansion happens one token at a time, so a multi-word key can never
-match — put the phrase in the entry's aliases instead.
+'how much do you charge for design'   answered   £600/day.
+'what do you bill for review'         answered   £500/day.
+'how much for design'                 answered   £600/day.
 ```
 
-That direction is the useful one anyway: the *value* may be a phrase, which
-is how `{"wfh": "work from home"}` works.
+All three were refused before.
+
+Phrases are matched **longest first**, so a map holding both `"how much"` and
+`"much"` reads the pair as the pair. Without that the longer entry could
+never fire, which is the same silent failure as refusing it.
 
 ## Synonyms or aliases
 

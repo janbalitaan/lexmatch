@@ -10,6 +10,33 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Synonym keys may be phrases. `{"how much": "rate"}` is the point: a
+  paraphrase sharing no word with the question is the one thing neither
+  stopwords nor single-word synonyms can bridge. An earlier version refused
+  a multi-word key on the grounds that expansion happened one token at a
+  time — a statement about the implementation rather than a constraint, and
+  the implementation changed. Matched longest first, so a map holding both
+  "how much" and "much" reads the pair as the pair.
+- The query pipeline runs in the order the features need: normalize keeping
+  stopwords, correct typos, expand synonyms, *then* strip stopwords.
+  Stripping first destroyed a phrase synonym made of stopwords, so
+  `{"how much": "rate"}` never fired on "how much do you charge" — the exact
+  paraphrase phrase keys exist for.
+- A query word that appears in no entry no longer counts against the phrase
+  overlap. Dice is `2|A∩B| / (|A|+|B|)`, and a word in no entry can never be
+  in an intersection — so counting it lowered every score equally. With
+  "how much do you charge for design" the correct entry ranked first either
+  way but scored 0.400 against a 0.45 threshold: the right answer, refused.
+  It scores 0.600 now.
+  - The content-overlap guard still runs on the *unfiltered* query, because
+    an unknown word is the evidence that the question is off-topic. Filtering
+    before the guard turned "what is the capital of France" into a
+    stopword-only query — the one shape allowed to match on filler — and it
+    matched "What is your rate" on "what is". Eighteen tests caught it.
+  - The filter is skipped entirely for a query of nothing but stopwords,
+    where the filler *is* the signal: "who are you" and "what do you do"
+    differ only in their filler, and dropping the unknown word shrank the
+    denominator and pushed a filler-only match over the threshold.
 - `Index.reply()` and the `Reply`/`Outcome` models, for the three ways a
   query fails that each need a different thing said. `answer()` returns a
   pair, which is enough to know whether anything matched and not enough to

@@ -21,7 +21,7 @@ from lexmatch.models.reply import Reply
 from lexmatch.models.tuning import Tuning
 from lexmatch.negation import Negation
 from lexmatch.questions import QuestionSplitter
-from lexmatch.text import normalize, query_terms
+from lexmatch.text import normalize
 
 
 class Index:
@@ -55,6 +55,10 @@ class Index:
         # Kept as a plain attribute because it was one, and reading
         # `index.threshold` is how callers already check what was configured.
         self.threshold: float = self.tuning.threshold
+        # Entries are expanded but not typo-corrected. Correction exists to
+        # read a visitor's mistake; an entry is the thing being matched
+        # against, so "correcting" it would be changing the index to suit a
+        # guess. A misspelled entry is the owner's to fix.
         expand = self.tuning.synonyms.expand
         # Both sides go through the same map, so a short form in a query
         # meets a long form in an entry whichever one was written short.
@@ -77,7 +81,7 @@ class Index:
 
     def score(self, query: str) -> list[tuple[float, Entry]]:
         """Score every entry against the query, best first."""
-        tokens = self._prepare(query_terms(query))
+        tokens = self._prepare_query(query, keep_stopwords=False)
         if not tokens or not self.entries:
             return []
         ceiling = self._score_ceiling(set(tokens))
@@ -274,15 +278,62 @@ class Index:
         }
         self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
 
-    def _prepare(self, tokens: list[str]) -> list[str]:
-        """Correct, then expand — in that order, and the order matters.
+    def _comparable(self, tokens: set[str]) -> set[str]:
+        """Drop query words that appear in no entry at all.
 
-        A mistyped short form has to become the short form before the synonym
-        map can recognize it: correcting after expanding would leave "wfhh"
-        unexpanded, because the map is keyed on "wfh".
+        Dice is `2|A∩B| / (|A|+|B|)`. A word in no entry can never be in any
+        intersection, so counting it in `|A|` lowers every score equally —
+        noise with no signal, and the lower the score the more likely a right
+        answer falls under the threshold.
+
+        It shows up most with a paraphrase. `{"how much": "rate"}` expands
+        "how much do you charge for design" and keeps the originals, so
+        "much" and "charge" ride along matching nothing: the correct entry
+        ranked first either way but scored 0.400 instead of 0.612, and the
+        threshold is 0.45. The right answer was there and refused.
+
+        Also catches a typo that could not be corrected, and a word from a
+        question the index was never given.
+
+        Used for the Dice ratio only. The content-overlap guard still runs
+        on the unfiltered set, because an unknown word is evidence that the
+        query is about something the index does not cover — filtering it out
+        before the guard turned an off-topic question into a stopword-only
+        one, which is the one shape allowed to match on filler.
+
+        Everything is kept when nothing is recognized, because a query made
+        only of unknown words has nothing else to be compared on and scoring
+        zero against everything is the honest outcome either way.
         """
-        corrected = self.tuning.corrections.apply(tokens, self._vocabulary)
-        return self.tuning.synonyms.expand(corrected)
+        known = {token for token in tokens if token in self._vocabulary}
+        return known or tokens
+
+    def _prepare_query(self, query: str, keep_stopwords: bool) -> list[str]:
+        """Turn raw text into the tokens scoring compares.
+
+        The order is the whole of it, and getting it wrong is silent.
+
+        **Normalize keeping stopwords, then correct, then expand, then strip.**
+
+        Stripping first destroyed a phrase synonym made of stopwords: "how
+        much" is two stopwords, so `{"how much": "rate"}` never fired and
+        "how much do you charge" stayed unanswered — the exact paraphrase
+        that phrase keys exist for.
+
+        Correcting before expanding, because a mistyped short form has to
+        become the short form first: the synonym map is keyed on "wfh", so
+        "wfhh" expands to nothing if the order is reversed.
+        """
+        words = normalize(query, keep_stopwords=True)
+        corrected = self.tuning.corrections.apply(words, self._vocabulary)
+        expanded = self.tuning.synonyms.expand(corrected)
+        if keep_stopwords:
+            return expanded
+        stripped = [word for word in expanded if word not in self.tuning.stopwords]
+        # A query of nothing but stopwords — "what do you do?" — has every
+        # word removed, and the index holds stopwords too, so the unstripped
+        # form is the one that can still match.
+        return stripped or expanded
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
         """Compute the best score this query could achieve, to scale to 0..1."""
@@ -317,11 +368,31 @@ class Index:
         exists: BM25 cannot rank them, because stopwords appear in every entry
         and carry no IDF. Those may match on filler, since filler is all they
         have.
+
+        Words the index has never heard of are dropped first — see
+        `_comparable`.
         """
-        query_tokens = set(self.tuning.synonyms.expand(normalize(query, keep_stopwords=True)))
-        if not query_tokens:
+        asked = set(self._prepare_query(query, keep_stopwords=True))
+        if not asked:
             return 0.0
-        content_tokens = query_tokens - self.tuning.stopwords
+        # The guard below runs on what was *asked*, including words the index
+        # has never heard of. Those words are the evidence that the query is
+        # about something else: filtering them out first turned an off-topic
+        # question into a stopword-only one — the single shape allowed to
+        # match on filler alone — and "what is the capital of France" then
+        # matched "What is your rate" on "what is". Eighteen tests caught it.
+        content_tokens = asked - self.tuning.stopwords
+        # Dice runs on what is *comparable*, but only when there is content
+        # to compare. A word in no entry can never be in an intersection, so
+        # counting it in the denominator lowers every score equally — noise
+        # with no signal.
+        #
+        # For a query of nothing but stopwords the filler *is* the signal:
+        # "who are you" and "what do you do" differ only in their filler, and
+        # dropping the unknown word shrank the denominator and pushed a
+        # filler-only match from 0.444 to 0.500 — over the threshold, so a
+        # bare index began answering "who are you" with whatever came first.
+        query_tokens = self._comparable(asked) if content_tokens else asked
         best = 0.0
         for phrase in self._phrases[position]:
             # Phrases are non-empty: an alias that normalizes to nothing is

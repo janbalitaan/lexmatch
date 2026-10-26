@@ -149,7 +149,7 @@ class TestTheWorkedExamplesRun:
         query = "what is your rate for consulting"
         loose = Index(entries, tuning=Tuning(minimum_overlap=1))
         strict = Index(entries, tuning=Tuning(minimum_overlap=2))
-        assert abs(loose.score(query)[0][0] - 0.769) < 0.001
+        assert abs(loose.score(query)[0][0] - 0.833) < 0.001
         assert abs(strict.score(query)[0][0] - 0.042) < 0.001
         assert loose.answer(query)[0] is not None
         assert strict.answer(query)[0] is None

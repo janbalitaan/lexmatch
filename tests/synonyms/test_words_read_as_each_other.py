@@ -91,11 +91,42 @@ class TestBuildingTheMap:
             "home",
         )
 
-    def test_a_multi_word_key_is_refused(self):
-        """Expansion is token by token, so it could never match — and a map
-        that silently does nothing looks exactly like one that works."""
-        with pytest.raises(SynonymError, match="more than one word"):
-            Synonyms.of({"work from home": "remote"})
+    def test_a_phrase_key_is_accepted(self):
+        """It used to be refused, on the grounds that expansion happened one
+        token at a time. That was a statement about the implementation
+        rather than a constraint, and `{"how much": "rate"}` is the one
+        thing neither stopwords nor single-word synonyms can bridge."""
+        synonyms = Synonyms.of({"how much": "rate"})
+        assert synonyms.mapping["how much"] == ("rate",)
+        assert synonyms.longest_key == 2
+
+    def test_a_phrase_is_matched_across_tokens(self):
+        synonyms = Synonyms.of({"how much": "rate"})
+        assert synonyms.expand(["how", "much", "for", "design"]) == [
+            "how",
+            "much",
+            "rate",
+            "for",
+            "design",
+        ]
+
+    def test_the_longest_phrase_wins(self):
+        """A map holding both "how much" and "much" has to read the pair as
+        the pair, or the longer entry could never fire — the same silent
+        failure as refusing it outright."""
+        synonyms = Synonyms.of({"how much": "rate", "much": "lots"})
+        assert synonyms.expand(["how", "much"]) == ["how", "much", "rate"]
+        assert synonyms.expand(["much", "later"]) == ["much", "lots", "later"]
+
+    def test_a_phrase_that_does_not_appear_changes_nothing(self):
+        synonyms = Synonyms.of({"how much": "rate"})
+        assert synonyms.expand(["how", "are", "you"]) == ["how", "are", "you"]
+
+    def test_a_single_word_map_needs_no_lookahead(self):
+        assert Synonyms.of({"wfh": "remote"}).longest_key == 1
+
+    def test_an_empty_map_reports_a_window_of_one(self):
+        assert Synonyms().longest_key == 1
 
     def test_an_empty_key_is_refused(self):
         with pytest.raises(SynonymError, match="cannot be empty"):
