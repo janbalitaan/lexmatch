@@ -15,13 +15,8 @@ from __future__ import annotations
 
 import math
 
-from lexmatch.constants import (
-    DEFAULT_THRESHOLD,
-    LENGTH_PENALTY,
-    TERM_FREQUENCY_SATURATION,
-)
 from lexmatch.models.entry import Entry
-from lexmatch.stopwords import STOPWORDS
+from lexmatch.models.tuning import Tuning
 from lexmatch.text import normalize, query_terms
 
 
@@ -33,9 +28,29 @@ class Index:
     simply by containing more words.
     """
 
-    def __init__(self, entries: list[Entry], threshold: float = DEFAULT_THRESHOLD) -> None:
+    def __init__(
+        self,
+        entries: list[Entry],
+        threshold: float | None = None,
+        tuning: Tuning | None = None,
+    ) -> None:
+        """Build an index over these entries.
+
+        `tuning` replaces every number the scorer uses — the threshold, the
+        term-frequency saturation, the length penalty, the minimum content
+        overlap, and the stopword list. See `lexmatch.models.tuning`.
+
+        `threshold` stays for the common case of changing only that, and
+        wins over `tuning.threshold` when both are given: a caller who named
+        it explicitly meant it.
+        """
+        self.tuning: Tuning = tuning or Tuning()
+        if threshold is not None:
+            self.tuning = self.tuning.with_threshold(threshold)
         self.entries: list[Entry] = entries
-        self.threshold: float = threshold
+        # Kept as a plain attribute because it was one, and reading
+        # `index.threshold` is how callers already check what was configured.
+        self.threshold: float = self.tuning.threshold
         self._documents: list[list[str]] = [entry.terms() for entry in entries]
         self._phrases: list[list[str]] = [entry.asked_phrases() for entry in entries]
         self._lengths: list[int] = [len(document) for document in self._documents]
@@ -100,7 +115,8 @@ class Index:
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
         """Compute the best score this query could achieve, to scale to 0..1."""
-        per_term = self._max_idf * (TERM_FREQUENCY_SATURATION + 1) / TERM_FREQUENCY_SATURATION
+        saturation = self.tuning.saturation
+        per_term = self._max_idf * (saturation + 1) / saturation
         return per_term * len(unique_tokens) or 1.0
 
     def _bm25(self, position: int, unique_tokens: set[str], ceiling: float) -> float:
@@ -112,11 +128,11 @@ class Index:
             frequency = counts.get(term, 0)
             if not frequency:
                 continue
-            denominator = frequency + TERM_FREQUENCY_SATURATION * (
-                1 - LENGTH_PENALTY + LENGTH_PENALTY * length / average
-            )
+            saturation = self.tuning.saturation
+            penalty = self.tuning.length_penalty
+            denominator = frequency + saturation * (1 - penalty + penalty * length / average)
             weight = self._inverse_document_frequency.get(term, 0.0)
-            total += weight * frequency * (TERM_FREQUENCY_SATURATION + 1) / denominator
+            total += weight * frequency * (saturation + 1) / denominator
         return min(total / ceiling, 1.0)
 
     def _phrase_score(self, position: int, query: str) -> float:
@@ -134,7 +150,7 @@ class Index:
         query_tokens = set(normalize(query, keep_stopwords=True))
         if not query_tokens:
             return 0.0
-        content_tokens = query_tokens - STOPWORDS
+        content_tokens = query_tokens - self.tuning.stopwords
         best = 0.0
         for phrase in self._phrases[position]:
             # Phrases are non-empty: an alias that normalizes to nothing is
@@ -143,7 +159,14 @@ class Index:
             phrase_tokens = set(phrase.split())
             if query_tokens == phrase_tokens:
                 return 1.0
-            if content_tokens and not (content_tokens & (phrase_tokens - STOPWORDS)):
+            stopwords = self.tuning.stopwords
+            # The constant described this guard but was never read: the
+            # requirement was hard-coded at "any overlap at all", so a
+            # caller who raised MIN_CONTENT_OVERLAP got no change. Reading it
+            # is what makes it tunable, and raising it to 2 is the lever for
+            # an index whose entries share a lot of vocabulary.
+            shared_content = content_tokens & (phrase_tokens - stopwords)
+            if content_tokens and len(shared_content) < self.tuning.minimum_overlap:
                 continue
             shared = len(query_tokens & phrase_tokens)
             if shared:

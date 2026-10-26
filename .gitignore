@@ -16,3 +16,7 @@ build/
 coverage.xml
 htmlcov/
 .DS_Store
+
+# complexipy's cache, written on every run. The old name is kept alongside
+# it: a checkout that ran the previous tool still has that directory.
+.complexipy_cache/
