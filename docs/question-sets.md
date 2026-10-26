@@ -73,11 +73,23 @@ A level-two heading is the question and the prose under it is the answer, so
 the page renders as documentation and loads as a question set — the one
 format where there is no second copy to drift out of date.
 
-Aliases come from an italic line opening with *Also asked*, *Also*, *Aliases*
-or *Variants*, which reads as a note to the reader rather than as
-configuration. Tags come from a line of `#hashtags`. A single `#` heading is
-the page title and not an entry, and `MarkdownParser.LEVEL` changes which
-level is read.
+Aliases come from a line opening with *Also asked*, *Also*, *Aliases* or
+*Variants*, which reads as a note to the reader rather than as
+configuration. Tags come from a line of `#hashtags`, or from one opening with
+*Tags*, *Tagged* or *Categories*.
+
+Italic and blockquote markup are both accepted, and so is neither, because
+all three are how people write that note:
+
+```markdown
+*Also asked: remote, work from home*
+> also: remote, work from home
+> tags: work, current
+```
+
+A single `#` heading is the page title and not an entry, and
+`MarkdownParser.LEVEL` changes which level is read. `ALSO_ASKED` and `TAGGED`
+hold the opening words.
 
 ## When something is wrong with the file
 

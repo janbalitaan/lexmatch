@@ -231,8 +231,9 @@ index = Index(CsvParser.read("faq.csv"))
 have. `CsvParser` matches column names case-insensitively, accepts `q`/`a`
 and `prompt`/`response`, and splits several aliases in one cell on a
 semicolon. `MarkdownParser` reads a level-two heading as the question, the
-prose under it as the answer, an italic *"Also asked: …"* line as aliases and
-a line of `#hashtags` as tags. Each class exposes its field names and
+prose under it as the answer, an *"Also asked: …"* line as aliases and a line
+of `#hashtags` or *"Tags: …"* as tags, in italic or blockquote markup or
+neither. Each class exposes its field names and
 separators as class attributes, so a file named differently loads without
 being rewritten.
 

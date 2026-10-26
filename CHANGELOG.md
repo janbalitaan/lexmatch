@@ -10,6 +10,10 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- `MarkdownParser` accepts the blockquote convention as well as the italic
+  one, and a named `Tags:` line as well as `#hashtags`. Both are how people
+  write a note to the reader, and accepting only one makes the other a
+  configuration format.
 - **A question set can be a file.** `CsvParser`, `JsonParser` and
   `MarkdownParser` read entries from the formats question sets actually live
   in — a spreadsheet export, an API response, the FAQ page that is already

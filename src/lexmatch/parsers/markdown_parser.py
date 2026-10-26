@@ -22,9 +22,17 @@ class MarkdownParser:
 
         *Also asked: remote, work from home*
 
-    Aliases come from an italic line beginning with one of `ALSO_ASKED`, which
-    reads naturally on the rendered page rather than looking like
-    configuration. Tags come from a line of `#hashtags`.
+    Aliases come from a line beginning with one of `ALSO_ASKED`, which reads
+    naturally on the rendered page rather than looking like configuration.
+    Tags come from a line of `#hashtags`, or from one beginning with one of
+    `TAGGED`.
+
+    Italic and blockquote markup are both accepted, because both are how
+    people write a note to the reader:
+
+        *Also asked: remote, work from home*
+        > also: remote, work from home
+        > tags: work, current
     """
 
     #: Which heading level starts an entry. Two by default, so the page can
@@ -38,6 +46,10 @@ class MarkdownParser:
         "aliases",
         "variants",
     )
+
+    #: Openings for a named tags line, for pages that write them out rather
+    #: than as hashtags.
+    TAGGED: ClassVar[tuple[str, ...]] = ("tags", "tagged", "categories")
 
     _TAGS: ClassVar[re.Pattern[str]] = re.compile(r"^\s*(#\w[\w-]*(?:\s+#\w[\w-]*)*)\s*$")
 
@@ -81,7 +93,11 @@ class MarkdownParser:
             if found is not None:
                 aliases.extend(found)
                 continue
-            tag_match = cls._TAGS.match(stripped)
+            named = cls._tags_in(stripped)
+            if named is not None:
+                tags.extend(named)
+                continue
+            tag_match = cls._TAGS.match(stripped.lstrip(">").strip())
             if tag_match:
                 tags.extend(part.lstrip("#") for part in tag_match.group(1).split())
                 continue
@@ -99,9 +115,29 @@ class MarkdownParser:
     @classmethod
     def _aliases_in(cls, stripped: str) -> list[str] | None:
         """Read an aliases line, or None when this is not one."""
-        bare = stripped.strip("*_").strip()
+        return cls._listed(stripped, cls.ALSO_ASKED)
+
+    @classmethod
+    def _tags_in(cls, stripped: str) -> list[str] | None:
+        """Read a named tags line, or None when this is not one."""
+        return cls._listed(stripped, cls.TAGGED)
+
+    @classmethod
+    def _listed(cls, stripped: str, openings: tuple[str, ...]) -> list[str] | None:
+        """Read "<opening>: a, b, c", however it is marked up.
+
+        Both the italic and the blockquote conventions are accepted, because
+        both are how people write a note to the reader:
+
+            *Also asked: remote, work from home*
+            > also: remote, work from home
+
+        The markers come off before the opening word is looked for, so a line
+        marked up either way, or not at all, reads the same.
+        """
+        bare = stripped.lstrip(">").strip().strip("*_").strip()
         lowered = bare.lower()
-        for opening in cls.ALSO_ASKED:
+        for opening in openings:
             if lowered.startswith(opening):
                 rest = bare[len(opening) :].lstrip(":").strip()
                 return [part.strip() for part in rest.split(",") if part.strip()]
