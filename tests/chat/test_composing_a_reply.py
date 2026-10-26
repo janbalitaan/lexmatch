@@ -227,7 +227,10 @@ class TestTheComposerDirectly:
         assert "your favourite film" in said
 
     def test_a_compose_reply_of_an_answered_reply(self):
-        entry = Entry(question="q", answer="An answer")
+        # A real question, not a placeholder: a one-character question
+        # normalizes to nothing and `Entry` refuses it, because no query
+        # could ever match it.
+        entry = Entry(question="What do you do?", answer="An answer")
         reply = Reply(outcome=Outcome.ANSWERED, entry=entry, score=1.0)
         assert Composer.compose_reply(reply) == "An answer."
 

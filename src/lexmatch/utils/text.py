@@ -9,6 +9,13 @@ import unicodedata
 from lexmatch.contractions import Contractions
 from lexmatch.stopwords import STOPWORDS
 
+#: A token needs a letter or a digit in it. The word pattern admits dots,
+#: plus signs and hashes so "node.js", "c++" and "c#" survive whole, which
+#: also made a run of them a token in its own right: "..." and "+++" were
+#: indexed as words, and an entry whose question was "..." passed validation
+#: as answerable.
+_HAS_CONTENT = re.compile(r"[a-z0-9]")
+
 #: Every apostrophe a keyboard or a word processor produces, mapped away.
 #: The curly ones arrive from anything that autocorrects, which is most
 #: phones.
@@ -31,6 +38,21 @@ class Tokenizer:
     # working detail, and nothing else should reach for it.
     _WORD: ClassVar[re.Pattern[str]] = re.compile(r"[a-z0-9+#.]+")
 
+    #: The shortest token kept. Two, because a single character is almost
+    #: always noise — an initial, a list marker, a stray letter from a split
+    #: contraction — and "a" and "i" are stopwords anyway.
+    #:
+    #: The cost is that a one-letter technology name cannot be indexed: "C"
+    #: and "R" are unmatchable, and an entry whose question is only one of
+    #: them is refused when it is built, which is the honest outcome rather
+    #: than a silent miss. Lowering this to 1 was measured and cost one
+    #: question in 133 while gaining nothing the benchmarks could see, so it
+    #: is not the default — but for an index that genuinely needs those
+    #: names:
+    #:
+    #:     Tokenizer.SHORTEST_WORD = 1
+    SHORTEST_WORD: ClassVar[int] = 2
+
     @classmethod
     def normalize(cls, text: str, keep_stopwords: bool = False) -> list[str]:
         """Lowercase, strip accents, split into comparable terms.
@@ -49,7 +71,11 @@ class Tokenizer:
         # A possessive collapses the same way: "company's rate" becomes
         # "companys rate", and stemming folds that onto "company".
         text = text.translate(_APOSTROPHES)
-        words = [word for word in cls._WORD.findall(text) if len(word) > 1]
+        words = [
+            word
+            for word in cls._WORD.findall(text)
+            if len(word) >= cls.SHORTEST_WORD and _HAS_CONTENT.search(word)
+        ]
         # The apostrophe is gone by now, so "don't" is "dont" — a token in no
         # stopword list and in no entry, which the weighting would treat as
         # one of the most discriminating words there is. Expanded into the

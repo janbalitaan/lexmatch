@@ -7,12 +7,17 @@ from lexmatch import (
     # matching
     Entry, Index, Reply, Outcome, Composer,
     QuestionSplitter, SmallTalk, Negation,
+    # reading a question set from a file
+    JsonParser, CsvParser, MarkdownParser,
     # tuning
     Tuning, Synonyms, Corrections,
+    # how words are read
+    Stemmer, Morphology, Contractions,
     # text
     normalize, query_terms,
     # errors
-    LexmatchError, SmallTalkError, SynonymError, TuningError,
+    LexmatchError, EntryError, ParseError,
+    SmallTalkError, SynonymError, TuningError,
     # constants
     DEFAULT_THRESHOLD, LENGTH_PENALTY, MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION, STOPWORDS, __version__,
@@ -203,10 +208,77 @@ Separates a message that asks more than one thing. `Index.answers()` uses
 it; it is exported so an application can decide for itself whether to treat
 a message as one question or several.
 
+## Reading a question set from a file
+
+```python
+JsonParser.read(path) -> list[Entry]
+JsonParser.parse(text) -> list[Entry]
+CsvParser.read(path) -> list[Entry]
+CsvParser.parse(text) -> list[Entry]
+MarkdownParser.read(path) -> list[Entry]
+MarkdownParser.parse(text) -> list[Entry]
+```
+
+A question set is content, and content belongs to whoever writes the answers.
+Each parser raises `ParseError` naming the line, row or key at fault.
+
+```python
+index = Index(CsvParser.read("faq.csv"))
+```
+
+`JsonParser` accepts a bare list or an object wrapping one under `entries`,
+`questions`, `faq`, `items` or `data`, and ignores keys an `Entry` does not
+have. `CsvParser` matches column names case-insensitively, accepts `q`/`a`
+and `prompt`/`response`, and splits several aliases in one cell on a
+semicolon. `MarkdownParser` reads a level-two heading as the question, the
+prose under it as the answer, an italic *"Also asked: …"* line as aliases and
+a line of `#hashtags` as tags. Each class exposes its field names and
+separators as class attributes, so a file named differently loads without
+being rewritten.
+
+## `Stemmer`
+
+```python
+Stemmer.stem(word) -> str
+Stemmer.stem_all(words) -> list[str]
+Stemmer.forget() -> None            # after changing the tables in place
+Stemmer.IRREGULAR, Stemmer.KEEP, Stemmer.SUFFIXES
+```
+
+Folds inflection onto one token — plurals, tenses, adverbs — and deliberately
+not derivation. See `stemming.md`. Replace it wholesale with
+`Tuning().with_stemmer(...)`, or `None` to match exact word forms.
+
+## `Morphology`
+
+```python
+Morphology.extend(token, vocabulary) -> str
+Morphology.extend_all(tokens, vocabulary) -> list[str]
+Morphology.SHORTEST_PREFIX, Morphology.STOP_AT
+```
+
+Reads a query word as the longer index word built from it, by prefix:
+"senior" to "seniority". Only lengthens toward a word the index holds, and
+refuses an ambiguous prefix. Replace with `Tuning().with_morphology(...)`.
+
+## `Contractions`
+
+```python
+Contractions.expand(words) -> list[str]
+Contractions.holds(word) -> bool
+Contractions.FORMS
+```
+
+Replaces a contraction with the words it stands for, keyed on the
+apostrophe-stripped form. See `informal-writing.md`.
+
 ## Errors
 
 ```python
 LexmatchError          # the base; catch this to catch everything
+EntryError             # an entry with no question or no answer
+ParseError             # a question set file that could not be read
+SmallTalkError         # a small-talk intent that does not exist
 SynonymError           # a synonym that could never match. Also a ValueError
 TuningError            # a tuning value outside its range. Also a ValueError
 ```
@@ -218,7 +290,7 @@ DEFAULT_THRESHOLD           # 0.45
 TERM_FREQUENCY_SATURATION   # 1.4,  BM25's k1
 LENGTH_PENALTY              # 0.72, BM25's b
 MIN_CONTENT_OVERLAP         # 1
-STOPWORDS                   # frozenset, 77 words
+STOPWORDS                   # frozenset, 137 words
 __version__
 ```
 

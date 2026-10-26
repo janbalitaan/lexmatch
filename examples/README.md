@@ -26,3 +26,12 @@ of articles to write.
 ```
 python examples/05_a_support_desk.py
 ```
+
+### 06_from_a_file.py
+
+Writes a question set as CSV, JSON and Markdown, reads all three into one
+index, and shows what a ParseError says when a file is wrong.
+
+```
+python examples/06_from_a_file.py
+```

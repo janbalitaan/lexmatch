@@ -10,6 +10,35 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- **A question set can be a file.** `CsvParser`, `JsonParser` and
+  `MarkdownParser` read entries from the formats question sets actually live
+  in — a spreadsheet export, an API response, the FAQ page that is already
+  written. Until now the only way to build an index was to write Python,
+  which made whoever writes the answers depend on whoever writes the code,
+  for every change.
+
+  Each raises `ParseError` naming the line, row or key at fault, because a
+  question set is long and often generated. CSV counts lines the way a
+  spreadsheet does, header included, so the number matches the screen. All
+  three ignore columns and keys that belong to other systems, and their field
+  names and separators are class attributes, so a file named differently
+  loads without being rewritten.
+- **An entry with no question or no answer is refused when it is built.** It
+  used to be accepted and then score zero against everything, which is
+  indistinguishable from an entry about something nobody asks — one is a
+  broken question set and the other is normal, and nothing downstream could
+  tell them apart. A blank alias is still dropped rather than refused,
+  because a trailing empty column is what an export looks like.
+- A token now needs a letter or a digit in it. The word pattern admits dots,
+  plus signs and hashes so "node.js", "c++" and "c#" survive whole, which
+  also made a run of them a token: "..." and "+++" were indexed as words.
+- `Tokenizer.SHORTEST_WORD` replaces a hard-coded two. The cost of two is
+  that "C" and "R" cannot be indexed; lowering it to one was measured and
+  cost a question while gaining nothing the benchmarks could see, so it stays
+  at two and is now a setting rather than a limitation.
+- `Stemmer`, `Morphology` and `Contractions` are exported from the package
+  root, which is where the documentation already said to find them, and
+  `api.md` covers them.
 - **Typo correction no longer merges two related words.** "designers" and
   "design" score exactly 0.800 and the length filter admitted them, so "how
   do you work with designers" was answered "How do you design a system?" at

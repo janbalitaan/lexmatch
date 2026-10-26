@@ -3,6 +3,7 @@
 | Page | |
 | --- | --- |
 | [Getting started](getting-started.md) | An index, a query, an answer. |
+| [Question sets](question-sets.md) | Reading entries from CSV, JSON or Markdown. |
 | [How scoring works](scoring.md) | BM25, phrase overlap, and why both. |
 | [Refusing to answer](refusing.md) | The threshold, and why a wrong answer is worse than none. |
 | [Replying like a chatbot](replying.md) | Ambiguity, negation, and relevance-ranked suggestions. |

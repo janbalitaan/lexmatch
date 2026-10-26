@@ -37,8 +37,11 @@ from lexmatch.constants import (
     MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION,
 )
+from lexmatch.contractions import Contractions
 from lexmatch.exceptions import (
+    EntryError,
     LexmatchError,
+    ParseError,
     SmallTalkError,
     SynonymError,
     TuningError,
@@ -52,9 +55,12 @@ from lexmatch.models import (
     Synonyms,
     Tuning,
 )
+from lexmatch.morphology import Morphology
 from lexmatch.negation import Negation
+from lexmatch.parsers import CsvParser, JsonParser, MarkdownParser
 from lexmatch.questions import QuestionSplitter
 from lexmatch.smalltalk import SmallTalk
+from lexmatch.stemming import Stemmer
 from lexmatch.stopwords import STOPWORDS
 from lexmatch.text import normalize, query_terms
 
@@ -65,16 +71,24 @@ __all__ = [
     "STOPWORDS",
     "TERM_FREQUENCY_SATURATION",
     "Composer",
+    "Contractions",
     "Corrections",
+    "CsvParser",
     "Entry",
+    "EntryError",
     "Index",
+    "JsonParser",
     "LexmatchError",
+    "MarkdownParser",
+    "Morphology",
     "Negation",
     "Outcome",
+    "ParseError",
     "QuestionSplitter",
     "Reply",
     "SmallTalk",
     "SmallTalkError",
+    "Stemmer",
     "SynonymError",
     "Synonyms",
     "Tuning",
