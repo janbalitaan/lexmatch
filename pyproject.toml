@@ -1,6 +1,6 @@
 [project]
 name = "lexmatch"
-version = "0.1.1"
+version = "0.1.2"
 description = "Dependency-free BM25 question matching with phrase scoring, for when embeddings are more machinery than you need"
 readme = "README.md"
 requires-python = ">=3.10"

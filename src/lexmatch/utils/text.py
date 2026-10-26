@@ -71,10 +71,18 @@ class Tokenizer:
         # A possessive collapses the same way: "company's rate" becomes
         # "companys rate", and stemming folds that onto "company".
         text = text.translate(_APOSTROPHES)
+        # A trailing period is sentence punctuation, not part of the word.
+        # The pattern has to admit periods for "node.js", ".net" and "3.11",
+        # which meant the last word of every sentence became its own term:
+        # "context." was a token no query could ever match, so the final
+        # word of each sentence in an answer was silently unsearchable.
+        # Only the edges are trimmed, so "node.js" survives intact.
         words = [
-            word
+            stripped
             for word in cls._WORD.findall(text)
-            if len(word) >= cls.SHORTEST_WORD and _HAS_CONTENT.search(word)
+            if (stripped := word.strip("."))
+            and len(stripped) >= cls.SHORTEST_WORD
+            and _HAS_CONTENT.search(stripped)
         ]
         # The apostrophe is gone by now, so "don't" is "dont" — a token in no
         # stopword list and in no entry, which the weighting would treat as

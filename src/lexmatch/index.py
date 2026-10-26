@@ -126,15 +126,20 @@ class Index:
         self._average_length: float = (
             sum(self._lengths) / len(self._lengths) if self._lengths else 0.0
         )
-        # Every term the index contains, which is what a mistyped query word
-        # is compared against. Built once: a query corrects against the
-        # vocabulary, not against a dictionary, so it can only ever be
-        # corrected toward something this index could answer.
+        # The terms a query may be corrected toward. Built once: a query
+        # corrects against this index, not against a dictionary, so it can
+        # only ever be corrected toward something this index could answer.
+        #
+        # Asked terms only — questions, aliases and tags, never answer
+        # bodies. A word buried in an answer is a weak scoring signal, but as
+        # a correction target it manufactures matches: "content" is one edit
+        # from "context", so an answer ending "...discuss that in context"
+        # made "the content of your work" retrieve a question about salary.
         # Unstemmed, because this is what a mistyped word is compared
         # against: "notce" has to reach "notice", and comparing it to the
         # stem "notic" is a worse match on a word nobody wrote.
         self._vocabulary: frozenset[str] = frozenset(
-            term for entry in entries for term in expand(entry.terms())
+            term for entry in entries for term in expand(entry.asked_terms())
         )
         # The same terms folded, for the prefix rule in `Morphology`. It has
         # to compare like with like: "secure" folds to "secur", which is a

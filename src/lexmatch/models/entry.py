@@ -69,5 +69,20 @@ class Entry:
         visitor *asked* outranks a word buried in a long answer. Stopwords are
         kept for them, so queries made entirely of stopwords still match.
         """
+        return self.asked_terms() + normalize(self.answer)
+
+    def asked_terms(self) -> list[str]:
+        """Return the terms a visitor could plausibly have used to ask this.
+
+        The question, its aliases and its tags — not the answer body.
+
+        Separate from `terms` because the two are used for different things.
+        Scoring wants the answer's words as a weak signal. Typo correction
+        must not: correcting a query word toward a word that appears only
+        deep in an answer invents a match on a word the visitor never used
+        and the owner never offered. "content" is one edit from "context",
+        and an answer ending "...discuss that in context" was enough to make
+        "the content of your work" retrieve it.
+        """
         asked = " ".join([self.question] * 3 + self.aliases * 3 + self.tags * 2)
-        return normalize(asked, keep_stopwords=True) + normalize(self.answer)
+        return normalize(asked, keep_stopwords=True)

@@ -97,4 +97,4 @@ __all__ = [
     "normalize",
     "query_terms",
 ]
-__version__ = "0.1.1"
+__version__ = "0.1.2"

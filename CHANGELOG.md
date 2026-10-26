@@ -6,6 +6,34 @@ caller is listed under **Changed** with what to do about it.
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-10-26
+
+### Fixed
+
+- A mistyped query word corrected toward words taken from **answer bodies**,
+  not only from the ways an entry can be asked. Correction toward a word that
+  appears nowhere a visitor could have read it invents a match: "content" is
+  one edit from "context", so an entry whose answer ended "...discuss that in
+  context" was retrieved by "tell me about the content of your work" — a
+  question about someone's work answered with one about their salary.
+
+  Correction now considers the question, its aliases and its tags.
+  `Entry.asked_terms()` is that set, and `Entry.terms()` keeps the answer's
+  words, so quoting a phrase from an answer still finds it. Only *correcting
+  toward* those words stopped.
+
+  The smaller vocabulary also made replies faster: 14.9 ms to 10.4 ms per
+  reply at 5000 entries.
+
+- A trailing period stayed attached to a token, so the last word of every
+  sentence became a term nothing could match. `"context."` and `"context"`
+  were different words, which made the final word of each sentence in an
+  answer unsearchable.
+
+  Periods at a word's edges are trimmed; periods inside one are not, so
+  `node.js`, `3.11`, `c++` and `c#` are unchanged. `.net` and `net` now meet
+  as the same token, which they did not before.
+
 ## [0.1.1] — 2026-10-26
 
 ### Changed
