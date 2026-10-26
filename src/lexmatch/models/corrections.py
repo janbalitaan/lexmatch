@@ -13,6 +13,10 @@ from lexmatch.constants import (
 )
 from lexmatch.exceptions import TuningError
 
+#: Characters between two words, above which a prefix relationship is
+#: derivation rather than a slip of the fingers.
+_SHORTEST_SUFFIX = 2
+
 
 @dataclass(frozen=True)
 class Corrections:
@@ -96,6 +100,8 @@ class Corrections:
             # index the token once is not available, because `ratio` is
             # asymmetric in about a tenth of pairs and the results would
             # change.
+            if self._is_derivation(token, candidate):
+                continue
             shared = sum((token_counts & Counter(candidate)).values())
             if 2.0 * shared / (token_length + len(candidate)) < highest:
                 continue
@@ -107,6 +113,34 @@ class Corrections:
         # One clear winner only. Two candidates equally close means the word
         # is ambiguous, and picking one is wrong half the time.
         return best[0] if len(best) == 1 else token
+
+    @staticmethod
+    def _is_derivation(token: str, candidate: str) -> bool:
+        """Whether these are two related words rather than one mistyped.
+
+        A typo is a slip: a dropped letter, a transposed pair, a neighbouring
+        key. A derivation is a different word built from the same root, and
+        treating one as the other merges two entries that answer different
+        questions — which is the merge stemming refuses for the same reason.
+
+        Measured: "how do you work with designers" was answered "How do you
+        design a system?" at 0.821, because "designers" and "design" score
+        exactly 0.800 and the length filter admitted them. Somebody typing
+        "designers" meant designers.
+
+        The line is **a prefix relationship with more than one character
+        between them**. "designers" is "design" plus "ers", "seniority" is
+        "senior" plus "ity", "consultant" is "consult" plus "ant" — all real
+        suffixes, none of them slips. Where only one character separates
+        them, as in "notic" for "notice" or "remot" for "remote", it is a
+        slip and correction is right to fix it.
+
+        What this declines is `Morphology`'s work, and that mechanism takes
+        it on with a stricter rule: it only ever lengthens toward a word the
+        index holds, and it refuses an ambiguous prefix outright.
+        """
+        shorter, longer = sorted((token, candidate), key=len)
+        return len(longer) - len(shorter) >= _SHORTEST_SUFFIX and longer.startswith(shorter)
 
     def describe(self) -> str:
         """Summarize, for a line that is safe to log."""

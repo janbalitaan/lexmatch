@@ -10,6 +10,24 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- **Typo correction no longer merges two related words.** "designers" and
+  "design" score exactly 0.800 and the length filter admitted them, so "how
+  do you work with designers" was answered "How do you design a system?" at
+  0.821. Somebody typing "designers" meant designers, and merging the two is
+  the merge stemming refuses for the same reason.
+
+  The line is a prefix relationship with more than one character between
+  them: "designers" is "design" plus "ers", while "notic" for "notice" is a
+  dropped letter. What correction now declines is `Morphology`'s work, and
+  that mechanism takes it on with a stricter rule — it only lengthens toward
+  a word the index holds, and it refuses an ambiguous prefix.
+- Nine more question-form stopwords, the verbs of asking how something is
+  decided or described: "decide", "choose", "determine", "define",
+  "describe", "explain", "select", "ensure". "how do you decide when to
+  refactor" matched the technical-debt entry on "refactor" at 0.482 and the
+  build-versus-buy entry on "decide" at 0.452 — close enough to tie, so a
+  question whose subject was clear got refused. The subject is what follows
+  the verb.
 - Typo correction skips the real comparison when a shared-character bound
   says no candidate can clear the threshold. Constructing a `SequenceMatcher`
   indexes its second sequence eagerly, and against 5000 entries that meant

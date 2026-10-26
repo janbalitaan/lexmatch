@@ -33,7 +33,7 @@ FAQ.
 
 ## One language's worth of stopwords
 
-The 128 shipped stopwords are English. For another language the list is wrong
+The 137 shipped stopwords are English. For another language the list is wrong
 in both directions — it removes nothing it should and keeps everything it
 should not:
 
@@ -94,6 +94,51 @@ unknown word charges for natural phrasing.
 `Tuning.unknown_word_cost` is kept for the case where the trade runs the
 other way: a deliberately narrow index where most of what it is asked is out
 of scope, and a refusal is better than a guess.
+
+## Two entries that mean different things by the same word
+
+The clearest example of the ceiling. An index with both
+
+```
+What are your rate expectations?     aliases: rate, salary, compensation
+How do you reduce cost?              aliases: cost, cloud spend, savings
+```
+
+answers *"what would you cost us"* with the cost-reduction entry. The asker
+meant compensation; `cost` is the only content word, and it belongs to the
+other entry.
+
+Four arrangements were tried. **None separates the two questions**, because
+whichever entry holds the word answers both of them:
+
+```
+                                   'what would      'how do you
+                                    you cost us'     reduce cost'
+cost on the reduction entry         COST   wrong     COST   right
+cost phrase added to the rate       ambiguous        ambiguous
+reduction entry avoids the word     RATE   right     RATE   wrong
+```
+
+The middle row is worth dwelling on, because it is the obvious fix and it
+makes things worse: a phrase alias contributes its individual words, so
+`"what would you cost"` puts the bare `cost` on the rate entry, the two tie,
+and a question that had always worked stops working.
+
+What does work is to stop pretending they are two questions. One entry owning
+the word, whose answer covers both senses, is right every time:
+
+```python
+Entry(
+    question="What do you cost?",
+    answer="My rate is X. On cloud cost, I have done Y.",
+    aliases=["rate", "salary", "what would you cost", "reduce cost", "cloud spend"],
+)
+```
+
+This is an authoring decision and not a tuning one. A lexical matcher cannot
+know that a chief executive costing a hire and an engineer asking about cloud
+spend mean different things by one word — that comes from who is asking, and
+nothing in the text carries it.
 
 ## One shared word can carry a wrong match
 

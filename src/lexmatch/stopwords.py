@@ -137,6 +137,20 @@ STOPWORDS = frozenset(
         "see",
         "take",
         "think",
+        # The verbs of asking how something is decided or described. "how do
+        # you decide when to refactor" matched the technical-debt entry on
+        # "refactor" at 0.482 and the build-versus-buy entry on "decide" at
+        # 0.452 — close enough to tie, so a question whose subject was clear
+        # was refused. The subject is what follows the verb.
+        "choose",
+        "decide",
+        "decides",
+        "define",
+        "describe",
+        "determine",
+        "ensure",
+        "explain",
+        "select",
         "use",
         "usually",
         "view",
