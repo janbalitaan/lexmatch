@@ -10,6 +10,25 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- **A question asked in an entry's own words is recognized as one.** A query
+  contained in one of an entry's phrasings is scored on its coverage of that
+  phrasing, which the weighted comparison cannot see when the shared words
+  are stopwords: "what are you working on" shares five of the seven tokens in
+  "What are you working on right now?", all but one of them a stopword, so by
+  content alone it matched one word that four other entries held too. A
+  question that was practically quoted scored 0.489 and was refused; it
+  scores 0.833 now.
+
+  Two conditions keep it off coincidence, and each was a measured regression
+  first. Coverage below 0.70 contributes nothing, because "you work" sits
+  inside three of five entries and lifting it put a tie over the ambiguity
+  floor. And it is only tried for a query with a substantive word, because a
+  filler query is inside a great many questions at high coverage — "what do
+  you do" went from answered to a refused tie across the whole index.
+
+  It runs as a pass of its own, entered once per query. Folding it into the
+  per-phrase loop as a method call cost 4 ms a reply against 5000 entries,
+  which is the only reason the shape is what it is.
 - Every parser takes `strict`, defaulting to true. A file loaded once at
   startup should say what is wrong with it; a file being edited while it is
   served should keep answering while its owner is halfway through the next

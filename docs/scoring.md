@@ -78,3 +78,34 @@ Case folded, punctuation dropped, and 137 stopwords removed — so *"what is
 your"* contributes nothing and cannot make two unrelated questions look
 similar. `normalize(text, keep_stopwords=True)` keeps them, for a caller who
 needs the whole token stream.
+
+## A question asked in the entry's own words
+
+A query that sits entirely inside one of an entry's phrasings is scored on how
+much of it the query covers, counted rather than weighted — because what is
+being measured there is the arrangement and not the vocabulary.
+
+```
+'what are you working on'  inside  'What are you working on right now?'
+  five tokens of seven  ->  2 * 5 / (5 + 7)  =  0.833
+```
+
+This exists because the weighted comparison cannot see it. All but one of
+those five shared words is a stopword, so by content alone the query matched
+a single word — "work" — which four other entries held too. A question that
+was practically quoted scored 0.489 and was refused.
+
+Two conditions keep it from firing on coincidence.
+
+**Coverage.** Every short query is inside *something*: "you work" sits in "Do
+you enjoy the work?", "Are you open to remote work?" and "Can you start work
+next month?" alike, covering two tokens of five. Below 0.70 containment
+contributes nothing.
+
+**Substance.** A query of pure filler is inside a great many questions —
+"what do you do" covers three of the four tokens in dozens of phrasings — and
+its coverage is genuinely high, so coverage alone does not catch it.
+Containment is only tried when the query has a substantive word in it.
+Nothing is lost by that: a filler query that really *is* one of an entry's
+phrasings is caught by the exact-match check, and anything else about it is
+what the stopword path is for.

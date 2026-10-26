@@ -33,6 +33,16 @@ _NEGLIGIBLE = 1e-9
 # Two distinct answers from one message means it really asked two things.
 _TWO_QUESTIONS = 2
 
+# How much of a phrasing a contained query must cover before containment
+# counts as near-exact wording rather than coincidence.
+#
+# Every short query is inside *something*: "you work" sits in "Do you enjoy
+# the work?", "Are you open to remote work?" and "Can you start work next
+# month?" alike, covering two tokens of five. 0.70 separates the measured
+# cases, because "what are you working on" covers five of the seven tokens in
+# "What are you working on right now?" at 0.833.
+_NEAR_EXACT = 0.70
+
 
 def _phrasing_tokens(entry: Entry) -> set[str]:
     """Every word an entry's own question and aliases use."""
@@ -574,6 +584,40 @@ class Index:
         )
         return 0.0 if uncovered else 1.0
 
+    def _near_exact(self, position: int, asked: set[str]) -> float:
+        """Return the best containment score among this entry's phrasings.
+
+        A query that sits entirely inside a phrasing is near-exact wording,
+        and the weighted comparison cannot see it when the shared words are
+        stopwords: "what are you working on" shares five of the seven tokens
+        in "What are you working on right now?" and all but one are
+        stopwords, so by content alone it matched one word that another entry
+        held too — and a question that was practically quoted scored 0.489
+        and was refused.
+
+        Counted rather than weighted, because what is being measured is the
+        arrangement and not the vocabulary.
+
+        Coverage is what makes it evidence rather than coincidence. Every
+        short query is inside *something*: "you work" sits in "Do you enjoy
+        the work?", "Are you open to remote work?" and "Can you start work
+        next month?" alike, covering two tokens of five, and treating that as
+        near-exact wording put a three-way tie over the ambiguity floor.
+
+        A pass of its own, entered once per query by the caller when the
+        query has substantive words. Folding it into the per-phrase loop as a
+        method call cost 4 ms a reply against five thousand entries, because
+        that loop runs ten thousand times for one query.
+        """
+        best = 0.0
+        asked_size = len(asked)
+        for phrase_tokens in self._phrase_tokens[position]:
+            if asked <= phrase_tokens:
+                covered = 2 * asked_size / (asked_size + len(phrase_tokens))
+                if covered >= _NEAR_EXACT:
+                    best = max(best, covered)
+        return best
+
     def _weighted_dice(
         self,
         shared: set[str],
@@ -837,11 +881,18 @@ class Index:
         if not query_tokens:
             return 0.0
         idf = self._inverse_document_frequency
-        query_content = query_tokens & content_tokens
-        query_mass = sum(
-            idf.get(token, 0.0) for token in (query_content if content_tokens else query_tokens)
-        )
-        best = 0.0
+        side = (query_tokens & content_tokens) if content_tokens else query_tokens
+        query_mass = sum(idf.get(token, 0.0) for token in side)
+        # Containment is near-exact wording, which the weighted comparison
+        # cannot see when the shared words are stopwords: "what are you
+        # working on" shares five of the seven tokens in "What are you
+        # working on right now?" and all but one are stopwords, so by content
+        # alone it matched a single word another entry held too.
+        #
+        # Only for a query with something substantive in it. A query of pure
+        # filler is inside a great many questions, so containment made it a
+        # near-exact match for all of them at once and the tie was refused.
+        best = self._near_exact(position, asked) if content_tokens else 0.0
         # Phrases are non-empty: an alias that normalizes to nothing is
         # dropped when the index is built, so there is no empty set to guard
         # against here. The tokens, their content and its weight are all
@@ -883,7 +934,7 @@ class Index:
             # entry's 0.637 on "standup" alone — and "standup" is an alias of
             # the agile entry and carries twice the weight of "work".
             if content_tokens:
-                query_side, phrase_side = query_content, phrase_content
+                query_side, phrase_side = side, phrase_content
                 side_mass = phrase_mass
             else:
                 query_side, phrase_side = query_tokens, phrase_tokens
