@@ -15,3 +15,14 @@ python examples/01_answer_a_question.py
 
 They are run by the test suite, so an example that stops working fails CI
 rather than failing the next person who tries it.
+
+### 05_a_support_desk.py
+
+A product FAQ rather than a personal one: a higher threshold because a
+wrong answer about billing costs more than a refusal, an escalation
+address for what it does not know, and `unanswered()` read as the backlog
+of articles to write.
+
+```
+python examples/05_a_support_desk.py
+```
