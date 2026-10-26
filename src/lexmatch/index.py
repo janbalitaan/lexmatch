@@ -126,6 +126,13 @@ class Index:
         self._vocabulary: frozenset[str] = frozenset(
             term for entry in entries for term in expand(entry.terms())
         )
+        # The same terms folded, for the prefix rule in `Morphology`. It has
+        # to compare like with like: "secure" folds to "secur", which is a
+        # prefix of "security", while the unfolded "secure" is not a prefix
+        # of anything because of its "e".
+        self._stemmed_vocabulary: frozenset[str] = frozenset(
+            self.tuning.fold(list(self._vocabulary))
+        )
         # The stopwords as the scorer will meet them. Stemming is applied to
         # tokens but the stopword set is written in whole words, so the two
         # stopped lining up: "there" folds to "ther", which is in no stopword
@@ -658,7 +665,14 @@ class Index:
         """
         words = normalize(query, keep_stopwords=True)
         corrected = self.tuning.corrections.apply(words, self._vocabulary)
-        return self.tuning.fold(self.tuning.synonyms.expand(corrected))
+        folded = self.tuning.fold(self.tuning.synonyms.expand(corrected))
+        # Last, and in stem space. A word the index does not hold may be the
+        # start of one it does — "senior" of "seniority" — and stemming has
+        # deliberately left that alone, because the endings it would have to
+        # strip are the ones that change what a word means.
+        if self.tuning.morphology is None:
+            return folded
+        return self.tuning.morphology(folded, self._stemmed_vocabulary)
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
         """Compute the best score this query could achieve, to scale to 0..1.

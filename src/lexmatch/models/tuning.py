@@ -17,6 +17,7 @@ from lexmatch.constants import (
 from lexmatch.exceptions import TuningError
 from lexmatch.models.corrections import Corrections
 from lexmatch.models.synonyms import Synonyms
+from lexmatch.morphology import Morphology
 from lexmatch.stemming import Stemmer
 from lexmatch.stopwords import STOPWORDS
 
@@ -48,6 +49,7 @@ class Tuning:
     ambiguity_floor: float = AMBIGUITY_FLOOR
     unknown_word_cost: float = UNKNOWN_WORD_COST
     stemmer: Callable[[str], str] | None = Stemmer.stem
+    morphology: Callable[[list[str], frozenset[str]], list[str]] | None = Morphology.extend_all
     stopwords: frozenset[str] = STOPWORDS
     synonyms: Synonyms = field(default_factory=Synonyms)
     corrections: Corrections = field(default_factory=Corrections)
@@ -104,6 +106,15 @@ class Tuning:
         if self.stemmer is None:
             return words
         return [self.stemmer(word) for word in words]
+
+    def with_morphology(
+        self, morphology: Callable[[list[str], frozenset[str]], list[str]] | None
+    ) -> Tuning:
+        """Replace the derivational bridge, or pass None to turn it off.
+
+        Tuning().with_morphology(None)   # exact stems only
+        """
+        return replace(self, morphology=morphology)
 
     def with_stemmer(self, stemmer: Callable[[str], str] | None) -> Tuning:
         """Replace the stemmer, or pass None to match exact word forms only.
@@ -212,6 +223,7 @@ class Tuning:
             f"ambiguity floor {self.ambiguity_floor}, "
             f"unknown word cost {self.unknown_word_cost}, "
             f"{'stemming on' if self.stemmer else 'stemming off'}, "
+            f"{'morphology on' if self.morphology else 'morphology off'}, "
             f"{len(self.stopwords)} stopwords, {self.synonyms.describe()}, "
             f"{self.corrections.describe()}"
         )

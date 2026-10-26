@@ -10,6 +10,22 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- `Morphology` bridges a query word to a longer index word built from it:
+  "senior" to "seniority", "secur" to "security". Stemming folds inflection
+  and deliberately stops at derivation, because the endings it would have to
+  stripchange what a word means — but an index that holds only the derived
+  form is then unreachable, and nothing reports the failure. Typo correction
+  does not bridge it either, and for a good reason: it compares only words of
+  a similar length, and "senior" and "seniority" differ by three.
+
+  A prefix rather than a similarity score, because that is what derivation
+  looks like in English, and ambiguity is refused — two index words starting
+  the same way means picking one is wrong half the time. Worth one question in
+  133 measured, which is small and honestly stated: how often an index holds a
+  derived form without its root is a property of the question set. The prefix
+  length was swept and three through six scored identically, so five is a
+  judgement and the comment says so. `Tuning.with_morphology(None)` turns it
+  off.
 - **Informal writing is read properly.** Three defects, and together they
   cost more accuracy than anything else measured: across twenty informally
   written questions, **65% answered before and 95% after**, with every other

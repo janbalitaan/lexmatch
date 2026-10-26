@@ -114,7 +114,8 @@ as "my questions are worded badly" rather than as a configuration error.
 index.tuning.describe()
 # threshold 0.45, saturation 1.4, length penalty 0.72
 # minimum overlap 1, ambiguity margin 0.05, ambiguity floor 0.5
-# unknown word cost 0.0, stemming on, 128 stopwords, 0 synonyms
+# unknown word cost 0.0, stemming on, morphology on, 128 stopwords
+# 0 synonyms
 # typo correction at 0.8 similarity, 4 characters and up
 ```
 
