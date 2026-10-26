@@ -10,6 +10,29 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- `Synonyms`, for a word that means the same thing across the whole index.
+  Aliases attach a phrasing to one entry, so a short form used everywhere
+  meant writing it into every entry — the same fact recorded five times, and
+  the fifth entry is the one somebody forgets. Declared once through
+  `Tuning().with_synonyms({"wfh": "work from home"})`; both the entries and
+  the queries go through the same map, and the original token is kept
+  alongside its expansion so a short form still matches an entry that uses
+  the short form. A multi-word key raises, since expansion is token by token
+  and a map that silently does nothing looks exactly like one that works.
+- `Index.answers()` and `Index.unanswered()`, for a message that asks more
+  than one thing. A compound message scores *worse* against every entry than
+  any one part would alone, because the phrase measure is an overlap ratio:
+  on "remote? rates? notice period?" the best entry reached 0.480 and the
+  other two 0.400 and 0.250, both under the threshold — one answer and two
+  silent omissions. Split first and each part scores as a standalone
+  question. `unanswered()` names the parts that found nothing, so a reply can
+  say what it missed rather than answer two of three and leave the third
+  unmentioned.
+- `QuestionSplitter`, exported so an application can decide for itself
+  whether a message is one question or several. Conservative by design:
+  `and` splits only before an interrogative word, so "remote and hybrid
+  work" stays one question while "what are your rates and when can you
+  start" becomes two.
 - `Tuning`, which makes every number the scorer uses replaceable — the
   threshold, the term-frequency saturation, the length penalty, the minimum
   content overlap and the stopword list. They were constants read straight

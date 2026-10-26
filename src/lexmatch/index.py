@@ -17,6 +17,7 @@ import math
 
 from lexmatch.models.entry import Entry
 from lexmatch.models.tuning import Tuning
+from lexmatch.questions import QuestionSplitter
 from lexmatch.text import normalize, query_terms
 
 
@@ -51,7 +52,10 @@ class Index:
         # Kept as a plain attribute because it was one, and reading
         # `index.threshold` is how callers already check what was configured.
         self.threshold: float = self.tuning.threshold
-        self._documents: list[list[str]] = [entry.terms() for entry in entries]
+        expand = self.tuning.synonyms.expand
+        # Both sides go through the same map, so a short form in a query
+        # meets a long form in an entry whichever one was written short.
+        self._documents: list[list[str]] = [expand(entry.terms()) for entry in entries]
         self._phrases: list[list[str]] = [entry.asked_phrases() for entry in entries]
         self._lengths: list[int] = [len(document) for document in self._documents]
         self._average_length: float = (
@@ -63,7 +67,7 @@ class Index:
 
     def score(self, query: str) -> list[tuple[float, Entry]]:
         """Score every entry against the query, best first."""
-        tokens = query_terms(query)
+        tokens = self.tuning.synonyms.expand(query_terms(query))
         if not tokens or not self.entries:
             return []
         ceiling = self._score_ceiling(set(tokens))
@@ -89,6 +93,54 @@ class Index:
         if best_score < self.threshold:
             return None, best_score
         return best_entry, best_score
+
+    def answers(self, message: str) -> list[tuple[Entry, float]]:
+        """Answer every question in a message, in the order asked.
+
+        A message asking two things scores *worse* against both than either
+        would alone, because the phrase measure is an overlap ratio: doubling
+        the query's length halves the proportion any one entry can share.
+        Measured on "remote? rates? notice period?" the best entry reached
+        0.480 and the other two 0.400 and 0.250 — so one got answered and two
+        were silently dropped.
+
+        Splitting first turns those into three questions that each score
+        1.000.
+
+        Returns one pair per question that found an answer, so a message with
+        two questions and one answerable gets a list of one. An empty list
+        means nothing was answerable, which is the same thing `answer()`
+        reports with `None` — and a caller wanting the whole message treated
+        as one question should still use `answer()`.
+
+        Duplicates are collapsed: "rates? pricing?" are two questions with
+        one answer, and saying it twice reads as a malfunction.
+        """
+        found: list[tuple[Entry, float]] = []
+        seen: set[int] = set()
+        for question in QuestionSplitter.split(message):
+            entry, score = self.answer(question)
+            if entry is None or id(entry) in seen:
+                continue
+            seen.add(id(entry))
+            found.append((entry, score))
+        return found
+
+    def unanswered(self, message: str) -> list[str]:
+        """Which questions in a message found no answer.
+
+        The companion to `answers()`. A message asking three things where two
+        are covered should say so rather than reply to two and leave the
+        third unmentioned — that reads as having been understood.
+
+            replies = index.answers(message)
+            missed = index.unanswered(message)
+        """
+        return [
+            question
+            for question in QuestionSplitter.split(message)
+            if self.answer(question)[0] is None
+        ]
 
     def suggestions(self, limit: int = 5) -> list[str]:
         """Questions to offer in an empty chat box."""
@@ -147,7 +199,7 @@ class Index:
         and carry no IDF. Those may match on filler, since filler is all they
         have.
         """
-        query_tokens = set(normalize(query, keep_stopwords=True))
+        query_tokens = set(self.tuning.synonyms.expand(normalize(query, keep_stopwords=True)))
         if not query_tokens:
             return 0.0
         content_tokens = query_tokens - self.tuning.stopwords

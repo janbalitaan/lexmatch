@@ -79,6 +79,8 @@ are weighted as heavily as the question itself.
 | [How scoring works](https://github.com/janbalitaan/lexmatch/blob/main/docs/scoring.md) | BM25, phrase overlap, and why both |
 | [Refusing to answer](https://github.com/janbalitaan/lexmatch/blob/main/docs/refusing.md) | The threshold, and why a wrong answer is worse |
 | [Aliases](https://github.com/janbalitaan/lexmatch/blob/main/docs/aliases.md) | Where most of the accuracy comes from |
+| [Synonyms](https://github.com/janbalitaan/lexmatch/blob/main/docs/synonyms.md) | A word that means the same thing index-wide |
+| [Compound questions](https://github.com/janbalitaan/lexmatch/blob/main/docs/compound-questions.md) | A message that asks more than one thing |
 | [Tuning](https://github.com/janbalitaan/lexmatch/blob/main/docs/tuning.md) | Every number, and when to move it |
 | [API reference](https://github.com/janbalitaan/lexmatch/blob/main/docs/api.md) | Everything importable |
 | [Limitations](https://github.com/janbalitaan/lexmatch/blob/main/docs/limitations.md) | What to use instead, and when |

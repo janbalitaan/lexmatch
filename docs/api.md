@@ -5,13 +5,13 @@ Everything importable from `lexmatch`. Nothing else is public.
 ```python
 from lexmatch import (
     # matching
-    Entry, Index,
+    Entry, Index, QuestionSplitter,
     # tuning
-    Tuning,
+    Tuning, Synonyms,
     # text
     normalize, query_terms,
     # errors
-    LexmatchError, TuningError,
+    LexmatchError, SynonymError, TuningError,
     # constants
     DEFAULT_THRESHOLD, LENGTH_PENALTY, MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION, STOPWORDS, __version__,
@@ -43,6 +43,8 @@ named it explicitly meant it.
 | Method | Returns | |
 | --- | --- | --- |
 | `.answer(query)` | `(Entry \| None, float)` | the best entry if it clears the threshold |
+| `.answers(message)` | `list[tuple[Entry, float]]` | one answer per question in a compound message |
+| `.unanswered(message)` | `list[str]` | the questions in it that found nothing |
 | `.score(query)` | `list[tuple[float, Entry]]` | every entry, ranked, best first |
 | `.suggestions(limit=5)` | `list[str]` | questions the index covers |
 | `.tuning` | `Tuning` | what is in force |
@@ -55,7 +57,7 @@ named it explicitly meant it.
 
 ```python
 Tuning(threshold=0.45, saturation=1.4, length_penalty=0.72,
-       minimum_overlap=1, stopwords=STOPWORDS)
+       minimum_overlap=1, stopwords=STOPWORDS, synonyms=Synonyms())
 ```
 
 Frozen; every adjustment returns a new one.
@@ -64,6 +66,7 @@ Frozen; every adjustment returns a new one.
 | --- | --- |
 | `.with_threshold(value)` | answer more or less readily |
 | `.with_stopwords(words, *, extra, keep)` | replace, add to, or subtract from the list |
+| `.with_synonyms(pairs)` | read words as each other, index-wide |
 | `.describe()` | safe to log |
 
 See [tuning](tuning.md) for what each number does and when to move it.
@@ -80,10 +83,38 @@ query_terms(text) -> list[str]
 an application that wants to match the library's tokenization — for
 highlighting, say — should not have to guess at it.
 
+## `Synonyms`
+
+```python
+Synonyms.of({"wfh": "work from home", "comp": "compensation"})
+```
+
+| Method | |
+| --- | --- |
+| `.expand(tokens)` | the tokens with known synonyms expanded in place |
+| `.with_pairs(pairs)` | these synonyms plus more |
+| `.describe()` | safe to log |
+
+Declared once for the whole index, where an alias would be per entry. Both
+the entries and the queries go through the same map. See
+[synonyms](synonyms.md).
+
+## `QuestionSplitter`
+
+```python
+QuestionSplitter.split(message) -> list[str]
+QuestionSplitter.looks_compound(message) -> bool
+```
+
+Separates a message that asks more than one thing. `Index.answers()` uses
+it; it is exported so an application can decide for itself whether to treat
+a message as one question or several.
+
 ## Errors
 
 ```python
 LexmatchError          # the base; catch this to catch everything
+SynonymError           # a synonym that could never match. Also a ValueError
 TuningError            # a tuning value outside its range. Also a ValueError
 ```
 

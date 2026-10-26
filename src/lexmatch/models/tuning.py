@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field, replace
 
 from lexmatch.constants import (
     DEFAULT_THRESHOLD,
@@ -12,6 +12,7 @@ from lexmatch.constants import (
     TERM_FREQUENCY_SATURATION,
 )
 from lexmatch.exceptions import TuningError
+from lexmatch.models.synonyms import Synonyms
 from lexmatch.stopwords import STOPWORDS
 
 
@@ -39,6 +40,7 @@ class Tuning:
     length_penalty: float = LENGTH_PENALTY
     minimum_overlap: int = MIN_CONTENT_OVERLAP
     stopwords: frozenset[str] = STOPWORDS
+    synonyms: Synonyms = field(default_factory=Synonyms)
 
     def __post_init__(self) -> None:
         """Reject a configuration that could not score anything sensibly."""
@@ -112,11 +114,24 @@ class Tuning:
         chosen -= frozenset(word.lower() for word in (keep or ()))
         return replace(self, stopwords=chosen)
 
+    def with_synonyms(self, pairs: Mapping[str, str | Iterable[str]]) -> Tuning:
+        """Return tuning that reads these words as each other.
+
+        For a word that means the same thing across the whole index, where an
+        alias per entry would be the same fact recorded five times:
+
+            Tuning().with_synonyms({"wfh": "work from home"})
+
+        Added to whatever synonyms are already set, the new ones winning on a
+        repeated key. See `lexmatch.models.synonyms`.
+        """
+        return replace(self, synonyms=self.synonyms.with_pairs(pairs))
+
     def describe(self) -> str:
         """Summarize the tuning, for a line that is safe to log."""
         return (
             f"threshold {self.threshold}, saturation {self.saturation}, "
             f"length penalty {self.length_penalty}, "
             f"minimum overlap {self.minimum_overlap}, "
-            f"{len(self.stopwords)} stopwords"
+            f"{len(self.stopwords)} stopwords, {self.synonyms.describe()}"
         )

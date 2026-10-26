@@ -6,6 +6,7 @@ imports from the modules above it, keeping the dependency direction one way.
 """
 
 from lexmatch.models.entry import Entry
+from lexmatch.models.synonyms import Synonyms
 from lexmatch.models.tuning import Tuning
 
-__all__ = ["Entry", "Tuning"]
+__all__ = ["Entry", "Synonyms", "Tuning"]
