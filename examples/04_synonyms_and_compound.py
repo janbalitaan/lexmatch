@@ -61,3 +61,35 @@ for entry, score in index.answers(mixed):
     print(f"  {score:.3f}  {entry.answer}")
 for missed in index.unanswered(mixed):
     print(f"  no answer for: {missed!r}")
+
+
+print()
+print("--- and the three ways a question can fail ---")
+from lexmatch import Outcome
+
+ambiguous = Index(
+    [
+        Entry(question="What is your rate for design work?", answer="£600/day."),
+        Entry(question="What is your rate for review work?", answer="£500/day."),
+        Entry(question="Are you open to remote work?", answer="Yes."),
+    ]
+)
+
+for question in (
+    "design rate",
+    "what is your rate",
+    "are you not open to remote work",
+    "what is the weather",
+):
+    reply = ambiguous.reply(question)
+    print(f"  {question!r}")
+    print(f"    {reply.describe()}")
+    if reply.answered:
+        print(f"    -> {reply.text}")
+    elif reply.outcome is Outcome.AMBIGUOUS:
+        options = " or ".join(entry.question.rstrip("?") for entry in reply.alternatives)
+        print(f"    -> Which did you mean — {options}?")
+    elif reply.outcome is Outcome.NEGATED:
+        print("    -> asked in the negative; the closest match says the opposite")
+    else:
+        print(f"    -> I don't have that. Try: {', '.join(reply.suggestions[:2])}")

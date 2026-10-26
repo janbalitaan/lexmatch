@@ -7,7 +7,9 @@ imports from the modules above it, keeping the dependency direction one way.
 
 from lexmatch.models.corrections import Corrections
 from lexmatch.models.entry import Entry
+from lexmatch.models.outcome import Outcome
+from lexmatch.models.reply import Reply
 from lexmatch.models.synonyms import Synonyms
 from lexmatch.models.tuning import Tuning
 
-__all__ = ["Corrections", "Entry", "Synonyms", "Tuning"]
+__all__ = ["Corrections", "Entry", "Outcome", "Reply", "Synonyms", "Tuning"]

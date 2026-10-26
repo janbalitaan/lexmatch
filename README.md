@@ -78,6 +78,7 @@ are weighted as heavily as the question itself.
 | [Getting started](https://github.com/janbalitaan/lexmatch/blob/main/docs/getting-started.md) | An index, a query, an answer |
 | [How scoring works](https://github.com/janbalitaan/lexmatch/blob/main/docs/scoring.md) | BM25, phrase overlap, and why both |
 | [Refusing to answer](https://github.com/janbalitaan/lexmatch/blob/main/docs/refusing.md) | The threshold, and why a wrong answer is worse |
+| [Replying like a chatbot](https://github.com/janbalitaan/lexmatch/blob/main/docs/replying.md) | Ambiguity, negation, relevance-ranked suggestions |
 | [Aliases](https://github.com/janbalitaan/lexmatch/blob/main/docs/aliases.md) | Where most of the accuracy comes from |
 | [Synonyms](https://github.com/janbalitaan/lexmatch/blob/main/docs/synonyms.md) | A word that means the same thing index-wide |
 | [Compound questions](https://github.com/janbalitaan/lexmatch/blob/main/docs/compound-questions.md) | A message that asks more than one thing |

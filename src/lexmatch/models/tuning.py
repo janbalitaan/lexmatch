@@ -6,6 +6,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 
 from lexmatch.constants import (
+    AMBIGUITY_MARGIN,
     DEFAULT_THRESHOLD,
     LENGTH_PENALTY,
     MIN_CONTENT_OVERLAP,
@@ -40,6 +41,7 @@ class Tuning:
     saturation: float = TERM_FREQUENCY_SATURATION
     length_penalty: float = LENGTH_PENALTY
     minimum_overlap: int = MIN_CONTENT_OVERLAP
+    ambiguity_margin: float = AMBIGUITY_MARGIN
     stopwords: frozenset[str] = STOPWORDS
     synonyms: Synonyms = field(default_factory=Synonyms)
     corrections: Corrections = field(default_factory=Corrections)
@@ -62,6 +64,12 @@ class Tuning:
                 f"length_penalty has to be between 0 and 1 (got "
                 f"{self.length_penalty}); 0 ignores entry length entirely and "
                 "1 applies it in full"
+            )
+        if self.ambiguity_margin < 0:
+            raise TuningError(
+                f"ambiguity_margin cannot be negative (got "
+                f"{self.ambiguity_margin}); 0 means only an exact tie counts "
+                "as ambiguous"
             )
         if self.minimum_overlap < 0:
             raise TuningError(
@@ -164,6 +172,7 @@ class Tuning:
             f"threshold {self.threshold}, saturation {self.saturation}, "
             f"length penalty {self.length_penalty}, "
             f"minimum overlap {self.minimum_overlap}, "
+            f"ambiguity margin {self.ambiguity_margin}, "
             f"{len(self.stopwords)} stopwords, {self.synonyms.describe()}, "
             f"{self.corrections.describe()}"
         )

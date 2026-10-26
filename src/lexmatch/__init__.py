@@ -43,7 +43,15 @@ from lexmatch.exceptions import (
     TuningError,
 )
 from lexmatch.index import Index
-from lexmatch.models import Corrections, Entry, Synonyms, Tuning
+from lexmatch.models import (
+    Corrections,
+    Entry,
+    Outcome,
+    Reply,
+    Synonyms,
+    Tuning,
+)
+from lexmatch.negation import Negation
 from lexmatch.questions import QuestionSplitter
 from lexmatch.smalltalk import SmallTalk
 from lexmatch.stopwords import STOPWORDS
@@ -59,7 +67,10 @@ __all__ = [
     "Entry",
     "Index",
     "LexmatchError",
+    "Negation",
+    "Outcome",
     "QuestionSplitter",
+    "Reply",
     "SmallTalk",
     "SmallTalkError",
     "SynonymError",

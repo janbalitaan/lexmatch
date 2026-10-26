@@ -10,6 +10,30 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- `Index.reply()` and the `Reply`/`Outcome` models, for the three ways a
+  query fails that each need a different thing said. `answer()` returns a
+  pair, which is enough to know whether anything matched and not enough to
+  behave like a chatbot.
+  - **Ambiguity was answered silently.** Two entries tied at 0.727 and
+    `answer()` returned the first — a confident wrong answer half the time,
+    with no way for the visitor to tell which half. `reply()` reports
+    `AMBIGUOUS` and offers both, so a caller can ask which was meant.
+    `ambiguity_margin` on the tuning decides how close counts as tied.
+  - **A negative question was answered affirmatively.** "Are you *not* open
+    to remote work" matched the affirmative entry at 0.923 and was answered
+    "Yes" — the opposite of correct. Lexical matching cannot tell a question
+    from its negation: they share every substantive word, and the negating
+    words are stopwords stripped before scoring sees them. `reply()` reports
+    `NEGATED` and names the closest match, so a caller can rephrase or
+    escalate rather than answer wrongly. Detection, not resolution.
+  - **Suggestions ignored the query.** A failed question was offered the
+    first few entries in the index whatever it had asked. They are ranked by
+    score now, so a near miss is offered what it nearly matched, and an
+    entry scoring zero is not offered at all.
+  - `reply.describe()` carries the outcome and the shape of the result and no
+    question or answer text, because a log of what visitors asked is
+    personal data.
+- `Negation`, exported for a caller who wants the check without the reply.
 - Typo correction, on by default. A lexical matcher refusing "whats your
   raets" reads as stupidity — a person answers without noticing — and
   neither aliases nor synonyms help, because a misspelling is not a word

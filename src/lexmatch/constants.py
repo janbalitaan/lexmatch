@@ -49,3 +49,12 @@ CORRECTION_SIMILARITY = 0.8
 # "correct" to "and" and a query about an API would be answered as a
 # conjunction.
 CORRECTION_MINIMUM_LENGTH = 4
+
+# How close the runner-up has to be before a question counts as ambiguous
+# rather than answered. Measured as a difference in score.
+#
+# Both entries cleared the threshold, so the question was understood — it
+# just was not specific enough to choose between them. Guessing is a
+# confident wrong answer half the time, and the visitor cannot tell which
+# half they got.
+AMBIGUITY_MARGIN = 0.05

@@ -16,7 +16,10 @@ from __future__ import annotations
 import math
 
 from lexmatch.models.entry import Entry
+from lexmatch.models.outcome import Outcome
+from lexmatch.models.reply import Reply
 from lexmatch.models.tuning import Tuning
+from lexmatch.negation import Negation
 from lexmatch.questions import QuestionSplitter
 from lexmatch.text import normalize, query_terms
 
@@ -100,6 +103,77 @@ class Index:
         if best_score < self.threshold:
             return None, best_score
         return best_entry, best_score
+
+    def reply(self, query: str) -> Reply:
+        """Answer a query, or say which of the three ways it could not be.
+
+        `answer()` returns a pair, which is enough to know whether anything
+        matched. It is not enough to behave like a chatbot, because the ways
+        a query fails need different things said:
+
+            nothing matched       "I don't know that. Try one of these."
+            two matched equally   "Which did you mean — design or review?"
+            a negative question   the match is the opposite of the answer
+
+        Collapsing those into `(None, 0.0)` is how a bot comes to answer
+        about design rates when it was asked about rates.
+        """
+        ranked = self.score(query)
+        if not ranked:
+            return Reply(outcome=Outcome.UNANSWERED)
+        best_score, best = ranked[0]
+
+        if best_score < self.threshold:
+            # Offer the near misses rather than the first entries in the
+            # list: a question that scored nothing against everything gets
+            # the index's own order, but one that nearly matched gets what
+            # it nearly matched.
+            return Reply(
+                outcome=Outcome.UNANSWERED,
+                score=best_score,
+                suggestions=self._near_misses(ranked),
+            )
+
+        if Negation.disagree(query, best.question):
+            return Reply(
+                outcome=Outcome.NEGATED,
+                entry=best,
+                score=best_score,
+                alternatives=(best,),
+            )
+
+        contenders = self._contenders(ranked, best_score)
+        if len(contenders) > 1:
+            return Reply(
+                outcome=Outcome.AMBIGUOUS,
+                score=best_score,
+                alternatives=contenders,
+                suggestions=tuple(entry.question for entry in contenders),
+            )
+        return Reply(outcome=Outcome.ANSWERED, entry=best, score=best_score)
+
+    def _contenders(
+        self, ranked: list[tuple[float, Entry]], best_score: float
+    ) -> tuple[Entry, ...]:
+        """Return the entries scoring within the ambiguity margin of the best."""
+        margin = self.tuning.ambiguity_margin
+        return tuple(
+            entry
+            for score, entry in ranked
+            if score >= self.threshold and best_score - score <= margin
+        )
+
+    def _near_misses(
+        self, ranked: list[tuple[float, Entry]], limit: int = 3
+    ) -> tuple[str, ...]:
+        """Return the questions a failed query came closest to.
+
+        Falls back to the index's own order when nothing scored at all,
+        because a query with no overlap has no near miss and the first few
+        questions are at least an honest menu.
+        """
+        scored = [entry.question for score, entry in ranked[:limit] if score > 0]
+        return tuple(scored or self.suggestions(limit=limit))
 
     def answers(self, message: str) -> list[tuple[Entry, float]]:
         """Answer every question in a message, in the order asked.

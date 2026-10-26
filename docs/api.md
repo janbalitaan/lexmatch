@@ -5,7 +5,8 @@ Everything importable from `lexmatch`. Nothing else is public.
 ```python
 from lexmatch import (
     # matching
-    Entry, Index, QuestionSplitter, SmallTalk,
+    Entry, Index, Reply, Outcome,
+    QuestionSplitter, SmallTalk, Negation,
     # tuning
     Tuning, Synonyms, Corrections,
     # text
@@ -42,6 +43,7 @@ named it explicitly meant it.
 
 | Method | Returns | |
 | --- | --- | --- |
+| `.reply(query)` | `Reply` | the answer, or which of three ways it failed |
 | `.answer(query)` | `(Entry \| None, float)` | the best entry if it clears the threshold |
 | `.answers(message)` | `list[tuple[Entry, float]]` | one answer per question in a compound message |
 | `.unanswered(message)` | `list[str]` | the questions in it that found nothing |
@@ -53,11 +55,53 @@ named it explicitly meant it.
 `answer()` returning `None` is the point of the library — see
 [refusing](refusing.md).
 
+## `Reply`
+
+```python
+reply = index.reply("what is your rate")
+
+reply.outcome        # Outcome.ANSWERED | AMBIGUOUS | NEGATED | UNANSWERED
+reply.answered       # bool
+reply.text           # the answer, or "" when there is none
+reply.entry          # Entry | None
+reply.score          # float
+reply.alternatives   # tuple[Entry, ...] — the close contenders
+reply.suggestions    # tuple[str, ...] — what to offer instead
+reply.describe()     # safe to log; carries no question or answer text
+```
+
+`answer()` is enough to know whether anything matched. `reply()` is enough to
+behave like a chatbot, because the three ways a query fails each need a
+different thing said. See [replying](replying.md).
+
+## `Outcome`
+
+```python
+Outcome.ANSWERED      # one entry won clearly
+Outcome.AMBIGUOUS     # two or more tied; offer the alternatives
+Outcome.NEGATED       # the query was negative and the match is not
+Outcome.UNANSWERED    # nothing cleared the threshold
+```
+
+A `str` enum, so it serializes as its name.
+
+## `Negation`
+
+```python
+Negation.present_in(text) -> bool
+Negation.disagree(query, question) -> bool
+```
+
+Detection, not resolution. Knowing a question is negative does not say what
+the answer is — "are you not available" might be answered "no, I am
+available" — so the reply is marked and the caller decides.
+
 ## `Tuning`
 
 ```python
 Tuning(threshold=0.45, saturation=1.4, length_penalty=0.72,
-       minimum_overlap=1, stopwords=STOPWORDS, synonyms=Synonyms())
+       minimum_overlap=1, ambiguity_margin=0.05,
+       stopwords=STOPWORDS, synonyms=Synonyms(), corrections=Corrections())
 ```
 
 Frozen; every adjustment returns a new one.
