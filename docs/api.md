@@ -5,7 +5,7 @@ Everything importable from `lexmatch`. Nothing else is public.
 ```python
 from lexmatch import (
     # matching
-    Entry, Index, Reply, Outcome,
+    Entry, Index, Reply, Outcome, Composer,
     QuestionSplitter, SmallTalk, Negation,
     # tuning
     Tuning, Synonyms, Corrections,
@@ -43,6 +43,7 @@ named it explicitly meant it.
 
 | Method | Returns | |
 | --- | --- | --- |
+| `.respond(message)` | `str` | the whole turn, written as a sentence |
 | `.reply(query)` | `Reply` | the answer, or which of three ways it failed |
 | `.answer(query)` | `(Entry \| None, float)` | the best entry if it clears the threshold |
 | `.answers(message)` | `list[tuple[Entry, float]]` | one answer per question in a compound message |
@@ -54,6 +55,29 @@ named it explicitly meant it.
 
 `answer()` returning `None` is the point of the library — see
 [refusing](refusing.md).
+
+## `Composer`
+
+```python
+Composer.compose(answers, missed) -> str
+Composer.compose_reply(reply) -> str
+```
+
+Writes one reply out of several answers, or out of none. `Index.respond()`
+uses it; subclass it for a voice of your own:
+
+```python
+class Warmer(Composer):
+    NOTHING = "Hmm, that one's new to me."
+    MISSED_ONE = "I'm afraid I don't know about {questions}!"
+    AND = "Also, "
+
+Index(entries, composer=Warmer)
+```
+
+Every phrase is a class attribute, so an override keeps the sequencing.
+Nothing is invented: every sentence is either an entry's own answer or one of
+these phrases. See [composing](composing.md).
 
 ## `Reply`
 

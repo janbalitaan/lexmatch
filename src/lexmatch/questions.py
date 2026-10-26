@@ -31,7 +31,16 @@ class QuestionSplitter:
     # this one — "rates and availability" is one question about two things,
     # while "what are your rates and when can you start" is two questions.
     _TERMINATORS = re.compile(r"[?;\n]+")
-    _BARE_CONJUNCTIONS = re.compile(r"\s+(?:and|also|plus|then)\s+", re.IGNORECASE)
+    # A comma, and a bare conjunction with no interrogative after it. Both
+    # belong to the loose reading only: "whats your design rate, notice
+    # period, and are you remote" is three questions in a list, while "Hello,
+    # what are your rates" is one question with a greeting in front of it.
+    # Nothing syntactic separates those, so the loose split is tried as a
+    # second opinion and kept only when it finds strictly more answers.
+    _BARE_CONJUNCTIONS = re.compile(
+        r",\s*(?:and\s+|also\s+|plus\s+)?|\s+(?:and|also|plus|then)\s+",
+        re.IGNORECASE,
+    )
     _CONJUNCTIONS = re.compile(
         r"\s+(?:and|also|plus|then)\s+(?=(?:what|when|where|who|why|how|which|do|does|did|are|is|was|can|could|will|would|should|have|has|had)\b)",
         re.IGNORECASE,

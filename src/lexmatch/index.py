@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 
+from lexmatch.composer import Composer
 from lexmatch.models.entry import Entry
 from lexmatch.models.outcome import Outcome
 from lexmatch.models.reply import Reply
@@ -37,6 +38,7 @@ class Index:
         entries: list[Entry],
         threshold: float | None = None,
         tuning: Tuning | None = None,
+        composer: type[Composer] | None = None,
     ) -> None:
         """Build an index over these entries.
 
@@ -49,6 +51,10 @@ class Index:
         it explicitly meant it.
         """
         self.tuning: Tuning = tuning or Tuning()
+        # A class rather than an instance: every method on it is a
+        # classmethod, so there is no state to carry and subclassing is the
+        # whole extension mechanism.
+        self._composer: type[Composer] = composer or Composer
         if threshold is not None:
             self.tuning = self.tuning.with_threshold(threshold)
         self.entries: list[Entry] = entries
@@ -213,16 +219,51 @@ class Index:
         return loose if len(loose) > len(strict) else strict
 
     def _answer_each(self, questions: list[str]) -> list[tuple[Entry, float]]:
-        """Answer each question, in order, without repeating an entry."""
+        """Answer each question, in order, without repeating an entry.
+
+        Goes through `reply()` rather than `answer()`. Using the simpler one
+        bypassed every check `reply()` exists for, on exactly the messages
+        most likely to need them: an ambiguous part of a compound message
+        was answered with the first of its contenders, and a negative part
+        was answered affirmatively. `answers()` looked like it worked while
+        quietly skipping the safety it was built on top of.
+        """
         found: list[tuple[Entry, float]] = []
         seen: set[int] = set()
         for question in questions:
-            entry, score = self.answer(question)
-            if entry is None or id(entry) in seen:
+            reply = self.reply(question)
+            if not reply.answered or reply.entry is None:
                 continue
-            seen.add(id(entry))
-            found.append((entry, score))
+            if id(reply.entry) in seen:
+                continue
+            seen.add(id(reply.entry))
+            found.append((reply.entry, reply.score))
         return found
+
+    def respond(self, message: str) -> str:
+        """Answer a whole message in one sentence, however it is shaped.
+
+        The top of the library. Splits a compound message, replies to each
+        part, and writes the result as something a person would say — so a
+        caller with a chat box needs one call rather than the four it took to
+        assemble this by hand.
+
+        Every sentence in the result is either an entry's own answer or one
+        of `Composer`'s fixed phrases. Nothing is invented, so a response can
+        say nothing the owner did not write.
+
+        For a voice of your own, subclass `Composer` and pass it as
+        `composer`; for the structure behind the sentence, use `reply()` and
+        `answers()` directly.
+        """
+        composer = self._composer
+        answers = self.answers(message)
+        if answers:
+            return composer.compose(answers, self.unanswered(message))
+        # Nothing answered. A single question gets the reason — ambiguous,
+        # negative, or simply unknown — which a list of zero answers cannot
+        # carry.
+        return composer.compose_reply(self.reply(message))
 
     def unanswered(self, message: str) -> list[str]:
         """Which questions in a message found no answer.

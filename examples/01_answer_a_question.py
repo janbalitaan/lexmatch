@@ -44,3 +44,14 @@ for question in questions:
         print(f"A: I don't have an answer for that.   ({score:.3f})")
         print(f"   Try: {', '.join(index.suggestions(limit=2))}")
     print()
+
+
+print("--- or let it write the whole reply ---")
+print()
+for message in (
+    "whats your rate, notice period, and are you remote?",
+    "remote? and what is your favourite film?",
+):
+    print(f"> {message}")
+    print(f"  {index.respond(message)}")
+    print()

@@ -30,6 +30,7 @@ Scores are scaled to 0..1, so a threshold means the same thing whatever the
 corpus size.
 """
 
+from lexmatch.composer import Composer
 from lexmatch.constants import (
     DEFAULT_THRESHOLD,
     LENGTH_PENALTY,
@@ -63,6 +64,7 @@ __all__ = [
     "MIN_CONTENT_OVERLAP",
     "STOPWORDS",
     "TERM_FREQUENCY_SATURATION",
+    "Composer",
     "Corrections",
     "Entry",
     "Index",

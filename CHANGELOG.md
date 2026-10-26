@@ -10,6 +10,35 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- `Index.respond()` and `Composer`, which write the whole turn as one
+  sentence. `answers()` returned a list and `unanswered()` the questions it
+  missed, leaving the caller to assemble the reply — the same code in every
+  application, and written badly, because the cases are not obvious until
+  you have hit them: three answers run together read as a dump, a missed
+  question left unmentioned reads as having been understood, and an
+  ambiguous question answered at all reads as a guess.
+  - Nothing is invented. Every sentence is either an entry's own answer or
+    one of `Composer`'s fixed phrases, so a response can say nothing the
+    owner did not write. An answer's wording is untouched except for a full
+    stop when it has none, because answers run together without one read as
+    a single sentence meaning something else.
+  - Every phrase is a class attribute, so an application with a voice of its
+    own subclasses `Composer`, overrides what it needs, and keeps the
+    sequencing — the connective before the last of several, the lower-casing
+    after it, the comma-and-"and" of a list.
+  - A missed question is turned back into a topic: "I don't have an answer
+    about *what is* your favourite film" reads as a transcript of the input
+    rather than as part of a reply.
+- `answers()` now replies to each question through `reply()` rather than
+  `answer()`. Using the simpler one bypassed every check `reply()` exists
+  for, on exactly the messages most likely to need them — an ambiguous part
+  of a compound message was answered with the first of its contenders, and a
+  negative part was answered affirmatively.
+- A comma separates questions in the loose reading, so "whats your design
+  rate, notice period, and are you remote" answers all three instead of one.
+  Loose only, because "Hello, what are your rates" is one question with a
+  greeting in front of it and nothing syntactic tells those apart — it wins
+  only when it finds strictly more answers.
 - Synonym keys may be phrases. `{"how much": "rate"}` is the point: a
   paraphrase sharing no word with the question is the one thing neither
   stopwords nor single-word synonyms can bridge. An earlier version refused

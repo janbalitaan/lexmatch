@@ -58,6 +58,10 @@ ignore = ["D107", "D203", "D213"]
 # a mutable in the middle, and the rule cannot tell a clean dispatch from a
 # tangle.
 "src/lexmatch/index.py" = ["PLR0911"]
+# `compose_reply` has one branch per outcome and each returns a different
+# sentence. An if/elif chain assigning to one variable would be the same
+# decisions with a mutable in the middle.
+"src/lexmatch/composer.py" = ["PLR0911"]
 # Examples are illustrative scripts, with the same exemptions as the tests
 # and for the same reason: they demonstrate rather than implement.
 "examples/*" = ["S", "D", "T201", "INP001", "E402"]
