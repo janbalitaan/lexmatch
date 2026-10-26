@@ -10,6 +10,17 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Five placeholder pronouns are stopwords: "other", "others", "another",
+  "same", "such". They stand in for something already mentioned, and with no
+  conversation state to resolve them against, a refusal is honest where a
+  match on a word that happens to appear somewhere is not — "what about the
+  other one" was answering a question nobody asked.
+
+  "one" and "ones" are deliberately **not** included, though "and that one?"
+  is the clearest case of the problem: "one to ones" is a whole entry's alias
+  and "One month." is an answer, and dropping the word cost a question a real
+  manager asked while saving one only a follow-up would. `limitations.md` has
+  the rest, which needs state rather than a word list.
 - **A question asked in an entry's own words is recognized as one.** A query
   contained in one of an entry's phrasings is scored on its coverage of that
   phrasing, which the weighted comparison cannot see when the shared words

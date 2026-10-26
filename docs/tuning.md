@@ -114,10 +114,10 @@ as "my questions are worded badly" rather than as a configuration error.
 index.tuning.describe()
 # threshold 0.45, saturation 1.4, length penalty 0.72
 # minimum overlap 1, ambiguity margin 0.05, ambiguity floor 0.5
-# unknown word cost 0.0, stemming on, morphology on, 137 stopwords
+# unknown word cost 0.0, stemming on, morphology on, 142 stopwords
 # 0 synonyms
 # typo correction at 0.8 similarity, 4 characters and up
 ```
 
-Counts the stopwords rather than listing them — a hundred and thirty-seven words in a log
+Counts the stopwords rather than listing them — a hundred and forty-two words in a log
 line is noise.

@@ -33,7 +33,7 @@ FAQ.
 
 ## One language's worth of stopwords
 
-The 137 shipped stopwords are English. For another language the list is wrong
+The 142 shipped stopwords are English. For another language the list is wrong
 in both directions — it removes nothing it should and keeps everything it
 should not:
 
@@ -94,6 +94,34 @@ unknown word charges for natural phrasing.
 `Tuning.unknown_word_cost` is kept for the case where the trade runs the
 other way: a deliberately narrow index where most of what it is asked is out
 of scope, and a refusal is better than a guess.
+
+## A follow-up that refers to the previous turn
+
+There is no conversation state. Each query is scored against the index alone,
+so a question that depends on what was just said cannot be answered:
+
+```
+'are you open to remote work'   ->  "Yes, six years of it."
+'and that one?'                 ->  answers something, confidently, wrongly
+'how about it'                  ->  refused
+```
+
+The second line is the problem, and it is worse than a refusal. "one" matches
+the numeral in "One month." or the alias "one to ones", so the follow-up gets
+a confident answer to a question nobody asked.
+
+Some of this class is fixable with stopwords and some is not. *"the other
+one"*, *"the same as before"* and *"any such thing"* now refuse, because
+"other", "same" and "such" carry no subject. **"one" is deliberately not a
+stopword**: "one to ones" is a whole entry's alias and "One month." is an
+answer, and dropping the word cost a question a real manager asked while
+saving one only a follow-up would.
+
+Resolving a pronoun needs to know what the previous turn was about, which is
+state this library does not keep — deliberately, because an index is a value
+and a conversation is not. An application that wants it can hold the last
+answered `Entry` itself and prepend its question to the next query before
+scoring.
 
 ## Two entries that mean different things by the same word
 

@@ -176,6 +176,28 @@ STOPWORDS = frozenset(
         "lot",
         "lots",
         "nothing",
+        # Placeholder pronouns: the words that stand in for a thing already
+        # mentioned. "and that one?" scored 0.614 against "What is your
+        # notice period?" and answered "One month." confidently — "one"
+        # matched the numeral in the answer, and the question was about
+        # whatever had just been discussed.
+        #
+        # There is no conversation state here to resolve them against, so
+        # the honest outcome is a refusal rather than a match on a word that
+        # happens to appear somewhere.
+        #
+        # "one" and "ones" are **not** here, though "and that one?" is the
+        # clearest case of the problem. They carry meaning too often: "one to
+        # ones" is a whole entry's alias and "One month." is an answer, and
+        # dropping the word cost a question that a real manager asked while
+        # saving one that only a follow-up would. A pronoun that refers to
+        # the previous turn wants conversation state, which this library does
+        # not have — see `limitations.md`.
+        "other",
+        "others",
+        "another",
+        "same",
+        "such",
         "someone",
         "something",
         "sort",
