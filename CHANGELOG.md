@@ -10,6 +10,24 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Typo correction, on by default. A lexical matcher refusing "whats your
+  raets" reads as stupidity — a person answers without noticing — and
+  neither aliases nor synonyms help, because a misspelling is not a word
+  anybody would declare. An unrecognized token is compared against the
+  index's own vocabulary, so a query can only be corrected toward something
+  this index could answer. `'whats your raets'` went 0.000 to 0.723,
+  `'pricng'` 0.000 to 0.978. A token already in the vocabulary is never
+  touched; tokens under four characters are skipped, since below that
+  almost everything is one edit from everything; and a tie is left alone.
+  `Tuning().with_corrections(enabled=False)` turns it off for an index of
+  product codes, where every token is one edit from another.
+- `SmallTalk`, for the things people say that are not questions. A bot that
+  refuses "thanks!" reads as broken in a way that refusing an obscure
+  question does not. Six intents — greeting, farewell, thanks, identity,
+  capability, wellbeing — with the phrasings shipped and the replies yours,
+  because how somebody says hello is the same everywhere and what the bot
+  says back is not. An unknown intent raises rather than leaving the handler
+  silently absent.
 - `Synonyms`, for a word that means the same thing across the whole index.
   Aliases attach a phrasing to one entry, so a short form used everywhere
   meant writing it into every entry — the same fact recorded five times, and
@@ -28,6 +46,15 @@ caller is listed under **Changed** with what to do about it.
   question. `unanswered()` names the parts that found nothing, so a reply can
   say what it missed rather than answer two of three and leave the third
   unmentioned.
+- `suggestions()` leaves small talk out. Offering "hello" and "thanks" to
+  somebody whose question could not be answered reads as not having
+  understood that they asked a question at all.
+- `answers()` weighs a strict and a loose reading of a compound message and
+  takes whichever finds more answers. The strict rule splits on `and` only
+  before an interrogative word, which keeps "remote and hybrid work" whole —
+  correctly — and also kept "comp and notice period" whole, which answered
+  one half silently. No syntactic rule separates those; the loose reading is
+  tried as a second opinion and discarded unless it finds strictly more.
 - `QuestionSplitter`, exported so an application can decide for itself
   whether a message is one question or several. Conservative by design:
   `and` splits only before an interrogative word, so "remote and hybrid

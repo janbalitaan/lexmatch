@@ -35,3 +35,17 @@ LENGTH_PENALTY = 0.72
 # a shared phrasing counts for anything. Without the guard, two questions
 # beginning "what is" match on that alone.
 MIN_CONTENT_OVERLAP = 1
+
+# How alike a mistyped word and a real one have to be before the first is
+# read as the second. Measured as difflib's ratio over the whole token, so
+# 0.8 is roughly one edit in five characters.
+#
+# High on purpose: a wrong correction answers a question nobody asked, which
+# is worse than refusing a question somebody did.
+CORRECTION_SIMILARITY = 0.8
+
+# Tokens shorter than this are never corrected. At three characters or fewer
+# almost everything is within one edit of everything else, so "api" would
+# "correct" to "and" and a query about an API would be answered as a
+# conjunction.
+CORRECTION_MINIMUM_LENGTH = 4

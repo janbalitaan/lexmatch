@@ -5,13 +5,13 @@ Everything importable from `lexmatch`. Nothing else is public.
 ```python
 from lexmatch import (
     # matching
-    Entry, Index, QuestionSplitter,
+    Entry, Index, QuestionSplitter, SmallTalk,
     # tuning
-    Tuning, Synonyms,
+    Tuning, Synonyms, Corrections,
     # text
     normalize, query_terms,
     # errors
-    LexmatchError, SynonymError, TuningError,
+    LexmatchError, SmallTalkError, SynonymError, TuningError,
     # constants
     DEFAULT_THRESHOLD, LENGTH_PENALTY, MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION, STOPWORDS, __version__,
@@ -67,6 +67,7 @@ Frozen; every adjustment returns a new one.
 | `.with_threshold(value)` | answer more or less readily |
 | `.with_stopwords(words, *, extra, keep)` | replace, add to, or subtract from the list |
 | `.with_synonyms(pairs)` | read words as each other, index-wide |
+| `.with_corrections(*, enabled, similarity, minimum_length)` | read mistyped words as real ones |
 | `.describe()` | safe to log |
 
 See [tuning](tuning.md) for what each number does and when to move it.
@@ -99,10 +100,34 @@ Declared once for the whole index, where an alias would be per entry. Both
 the entries and the queries go through the same map. See
 [synonyms](synonyms.md).
 
+## `Corrections`
+
+```python
+Corrections(similarity=0.8, minimum_length=4, enabled=True)
+```
+
+Reads a mistyped word as the index's own word. `'whats your raets'` scored
+0.000 before and is answered now. Only tokens **not** already in the
+vocabulary are touched, and only when exactly one candidate is close enough
+— a tie means the word is ambiguous. See [typos](typos.md).
+
+## `SmallTalk`
+
+```python
+SmallTalk.entries({"greeting": "Hello.", "thanks": "You're welcome."})
+SmallTalk.phrasings_for("greeting")
+SmallTalk.INTENTS
+```
+
+Builds entries for greetings, farewells, thanks, identity, capability and
+wellbeing. The phrasings are shipped — how somebody says hello is the same
+everywhere — and the replies are yours. See [small talk](small-talk.md).
+
 ## `QuestionSplitter`
 
 ```python
 QuestionSplitter.split(message) -> list[str]
+QuestionSplitter.split_loosely(message) -> list[str]
 QuestionSplitter.looks_compound(message) -> bool
 ```
 

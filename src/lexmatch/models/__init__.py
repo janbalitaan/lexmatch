@@ -5,8 +5,9 @@ entry.py rather than scrolling past the scoring that uses it. Nothing here
 imports from the modules above it, keeping the dependency direction one way.
 """
 
+from lexmatch.models.corrections import Corrections
 from lexmatch.models.entry import Entry
 from lexmatch.models.synonyms import Synonyms
 from lexmatch.models.tuning import Tuning
 
-__all__ = ["Entry", "Synonyms", "Tuning"]
+__all__ = ["Corrections", "Entry", "Synonyms", "Tuning"]

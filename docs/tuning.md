@@ -29,6 +29,7 @@ index cannot have its scoring altered after it was built.
 | `minimum_overlap` | 1 | substantive words a phrase must share before it scores |
 | `stopwords` | 77 words | words carrying no signal |
 | `synonyms` | none | words read as each other. See [synonyms](synonyms.md) |
+| `corrections` | on | mistyped words read as real ones. See [typos](typos.md) |
 
 **`saturation`** — lower makes the first occurrence of a term count for
 almost everything; higher lets repetition keep adding. Raise it when entries
@@ -98,7 +99,8 @@ as "my questions are worded badly" rather than as a configuration error.
 ```python
 index.tuning.describe()
 # threshold 0.45, saturation 1.4, length penalty 0.72,
-# minimum overlap 1, 77 stopwords, 0 synonyms
+# minimum overlap 1, 77 stopwords, 0 synonyms,
+# typo correction at 0.8 similarity, 4 characters and up
 ```
 
 Counts the stopwords rather than listing them — seventy-seven words in a log

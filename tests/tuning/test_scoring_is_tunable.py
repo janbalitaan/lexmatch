@@ -58,13 +58,20 @@ class TestTheDefaultsChangeNothing:
 
 
 class TestTheThreshold:
+    # A weak but non-zero match, scoring 0.485 against this index. The
+    # earlier choice of "can I work remotely" stopped being weak once typo
+    # correction began reading "remotely" as "remote" and lifting it to
+    # 1.000 — which is the correction working, and makes it useless here.
+    WEAK = "the next thing"
+
     def test_raising_it_refuses_a_weak_match(self):
-        entry, score = Index(ENTRIES, threshold=0.9).answer("can I work remotely")
+        entry, score = Index(ENTRIES, threshold=0.9).answer(self.WEAK)
+        assert 0 < score < 0.9, f"{self.WEAK!r} scored {score:.3f}, not weak"
         assert entry is None
-        assert score > 0, "the score is still reported, only not acted on"
 
     def test_the_default_accepts_it(self):
-        entry, _ = Index(ENTRIES).answer("can I work remotely")
+        entry, score = Index(ENTRIES).answer(self.WEAK)
+        assert score >= Index(ENTRIES).threshold
         assert entry is not None
 
     def test_above_one_refuses_everything(self):
@@ -76,7 +83,7 @@ class TestTheThreshold:
         """A caller who named it meant it."""
         index = Index(ENTRIES, threshold=0.9, tuning=Tuning(threshold=0.1))
         assert index.threshold == 0.9
-        assert index.answer("can I work remotely")[0] is None
+        assert index.answer(self.WEAK)[0] is None
 
     def test_a_negative_threshold_is_refused(self):
         with pytest.raises(TuningError, match="cannot be negative"):

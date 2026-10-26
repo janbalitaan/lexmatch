@@ -81,6 +81,8 @@ are weighted as heavily as the question itself.
 | [Aliases](https://github.com/janbalitaan/lexmatch/blob/main/docs/aliases.md) | Where most of the accuracy comes from |
 | [Synonyms](https://github.com/janbalitaan/lexmatch/blob/main/docs/synonyms.md) | A word that means the same thing index-wide |
 | [Compound questions](https://github.com/janbalitaan/lexmatch/blob/main/docs/compound-questions.md) | A message that asks more than one thing |
+| [Typos](https://github.com/janbalitaan/lexmatch/blob/main/docs/typos.md) | Reading a word somebody mistyped |
+| [Small talk](https://github.com/janbalitaan/lexmatch/blob/main/docs/small-talk.md) | Hello, thanks, who are you |
 | [Tuning](https://github.com/janbalitaan/lexmatch/blob/main/docs/tuning.md) | Every number, and when to move it |
 | [API reference](https://github.com/janbalitaan/lexmatch/blob/main/docs/api.md) | Everything importable |
 | [Limitations](https://github.com/janbalitaan/lexmatch/blob/main/docs/limitations.md) | What to use instead, and when |

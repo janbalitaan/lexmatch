@@ -31,6 +31,7 @@ class QuestionSplitter:
     # this one — "rates and availability" is one question about two things,
     # while "what are your rates and when can you start" is two questions.
     _TERMINATORS = re.compile(r"[?;\n]+")
+    _BARE_CONJUNCTIONS = re.compile(r"\s+(?:and|also|plus|then)\s+", re.IGNORECASE)
     _CONJUNCTIONS = re.compile(
         r"\s+(?:and|also|plus|then)\s+(?=(?:what|when|where|who|why|how|which|do|does|did|are|is|was|can|could|will|would|should|have|has|had)\b)",
         re.IGNORECASE,
@@ -46,6 +47,27 @@ class QuestionSplitter:
         parts: list[str] = []
         for sentence in cls._TERMINATORS.split(message):
             parts.extend(cls._CONJUNCTIONS.split(sentence))
+        return cls._keep_usable(parts)
+
+    @classmethod
+    def split_loosely(cls, message: str) -> list[str]:
+        """Split on a bare conjunction too, without the interrogative test.
+
+        The strict rule keeps "remote and hybrid work" whole, which is right,
+        and keeps "comp and notice period" whole, which is not — neither half
+        starts with an interrogative word and both are separate topics. No
+        syntactic rule separates those two cases; the difference is meaning.
+
+        So this exists as a *second opinion* rather than a replacement.
+        `Index.answers` tries the strict split first and falls back to this
+        only when the loose one answers strictly more questions, which is
+        evidence that the parts were separate after all. A loose split that
+        finds no extra answer is discarded, so the conservative behaviour is
+        what survives by default.
+        """
+        parts: list[str] = []
+        for sentence in cls._TERMINATORS.split(message):
+            parts.extend(cls._BARE_CONJUNCTIONS.split(sentence))
         return cls._keep_usable(parts)
 
     @classmethod

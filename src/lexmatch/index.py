@@ -61,13 +61,20 @@ class Index:
         self._average_length: float = (
             sum(self._lengths) / len(self._lengths) if self._lengths else 0.0
         )
+        # Every term the index contains, which is what a mistyped query word
+        # is compared against. Built once: a query corrects against the
+        # vocabulary, not against a dictionary, so it can only ever be
+        # corrected toward something this index could answer.
+        self._vocabulary: frozenset[str] = frozenset(
+            term for document in self._documents for term in document
+        )
         self._term_counts: list[dict[str, int]] = []
         self._inverse_document_frequency: dict[str, float] = {}
         self._build_statistics()
 
     def score(self, query: str) -> list[tuple[float, Entry]]:
         """Score every entry against the query, best first."""
-        tokens = self.tuning.synonyms.expand(query_terms(query))
+        tokens = self._prepare(query_terms(query))
         if not tokens or not self.entries:
             return []
         ceiling = self._score_ceiling(set(tokens))
@@ -116,9 +123,22 @@ class Index:
         Duplicates are collapsed: "rates? pricing?" are two questions with
         one answer, and saying it twice reads as a malfunction.
         """
+        strict = self._answer_each(QuestionSplitter.split(message))
+        loose = self._answer_each(QuestionSplitter.split_loosely(message))
+        # The loose split only wins by finding strictly more answers, which
+        # is evidence the parts were separate questions after all. "comp and
+        # notice period" has no interrogative in its second half, so the
+        # strict rule keeps it whole and answers one of the two; the loose
+        # one answers both. "remote and hybrid work" splits into halves that
+        # answer the same entry, so nothing is gained and the strict reading
+        # survives.
+        return loose if len(loose) > len(strict) else strict
+
+    def _answer_each(self, questions: list[str]) -> list[tuple[Entry, float]]:
+        """Answer each question, in order, without repeating an entry."""
         found: list[tuple[Entry, float]] = []
         seen: set[int] = set()
-        for question in QuestionSplitter.split(message):
+        for question in questions:
             entry, score = self.answer(question)
             if entry is None or id(entry) in seen:
                 continue
@@ -136,15 +156,30 @@ class Index:
             replies = index.answers(message)
             missed = index.unanswered(message)
         """
-        return [
-            question
-            for question in QuestionSplitter.split(message)
-            if self.answer(question)[0] is None
-        ]
+        # The same two readings `answers` weighs, so the two agree about
+        # what the message contained.
+        strict = QuestionSplitter.split(message)
+        loose = QuestionSplitter.split_loosely(message)
+        chosen = (
+            loose if len(self._answer_each(loose)) > len(self._answer_each(strict)) else strict
+        )
+        return [q for q in chosen if self.answer(q)[0] is None]
 
     def suggestions(self, limit: int = 5) -> list[str]:
-        """Questions to offer in an empty chat box."""
-        return [entry.question for entry in self.entries[:limit]]
+        """Questions to offer in an empty chat box, or after a refusal.
+
+        Small talk is excluded. Offering "hello" and "thanks" to somebody who
+        just asked something the index could not answer is worse than
+        offering nothing — it reads as not having understood that they asked
+        a question at all. They are recognized by the `smalltalk` tag that
+        `SmallTalk.entries` sets.
+
+        Falls back to including them only if there is nothing else, so an
+        index of small talk alone still suggests something.
+        """
+        content = [entry for entry in self.entries if "smalltalk" not in entry.tags]
+        offered = content or self.entries
+        return [entry.question for entry in offered[:limit]]
 
     def _build_statistics(self) -> None:
         document_frequency: dict[str, int] = {}
@@ -164,6 +199,16 @@ class Index:
             for term, seen in document_frequency.items()
         }
         self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
+
+    def _prepare(self, tokens: list[str]) -> list[str]:
+        """Correct, then expand — in that order, and the order matters.
+
+        A mistyped short form has to become the short form before the synonym
+        map can recognize it: correcting after expanding would leave "wfhh"
+        unexpanded, because the map is keyed on "wfh".
+        """
+        corrected = self.tuning.corrections.apply(tokens, self._vocabulary)
+        return self.tuning.synonyms.expand(corrected)
 
     def _score_ceiling(self, unique_tokens: set[str]) -> float:
         """Compute the best score this query could achieve, to scale to 0..1."""

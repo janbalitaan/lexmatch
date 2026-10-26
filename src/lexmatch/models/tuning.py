@@ -12,6 +12,7 @@ from lexmatch.constants import (
     TERM_FREQUENCY_SATURATION,
 )
 from lexmatch.exceptions import TuningError
+from lexmatch.models.corrections import Corrections
 from lexmatch.models.synonyms import Synonyms
 from lexmatch.stopwords import STOPWORDS
 
@@ -41,6 +42,7 @@ class Tuning:
     minimum_overlap: int = MIN_CONTENT_OVERLAP
     stopwords: frozenset[str] = STOPWORDS
     synonyms: Synonyms = field(default_factory=Synonyms)
+    corrections: Corrections = field(default_factory=Corrections)
 
     def __post_init__(self) -> None:
         """Reject a configuration that could not score anything sensibly."""
@@ -127,11 +129,41 @@ class Tuning:
         """
         return replace(self, synonyms=self.synonyms.with_pairs(pairs))
 
+    def with_corrections(
+        self,
+        *,
+        enabled: bool = True,
+        similarity: float | None = None,
+        minimum_length: int | None = None,
+    ) -> Tuning:
+        """Return tuning that reads mistyped words as the words they are.
+
+        On by default. `enabled=False` turns it off for an index whose
+        vocabulary is deliberately close together — product codes, part
+        numbers — where every token is one edit from another and correcting
+        is guessing.
+
+        Raise `similarity` toward 1.0 to correct less, lower it to correct
+        more. See `lexmatch.models.corrections`.
+        """
+        current = self.corrections
+        return replace(
+            self,
+            corrections=Corrections(
+                similarity=current.similarity if similarity is None else similarity,
+                minimum_length=(
+                    current.minimum_length if minimum_length is None else minimum_length
+                ),
+                enabled=enabled,
+            ),
+        )
+
     def describe(self) -> str:
         """Summarize the tuning, for a line that is safe to log."""
         return (
             f"threshold {self.threshold}, saturation {self.saturation}, "
             f"length penalty {self.length_penalty}, "
             f"minimum overlap {self.minimum_overlap}, "
-            f"{len(self.stopwords)} stopwords, {self.synonyms.describe()}"
+            f"{len(self.stopwords)} stopwords, {self.synonyms.describe()}, "
+            f"{self.corrections.describe()}"
         )

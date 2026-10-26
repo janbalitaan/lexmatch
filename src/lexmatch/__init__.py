@@ -36,10 +36,16 @@ from lexmatch.constants import (
     MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION,
 )
-from lexmatch.exceptions import LexmatchError, SynonymError, TuningError
+from lexmatch.exceptions import (
+    LexmatchError,
+    SmallTalkError,
+    SynonymError,
+    TuningError,
+)
 from lexmatch.index import Index
-from lexmatch.models import Entry, Synonyms, Tuning
+from lexmatch.models import Corrections, Entry, Synonyms, Tuning
 from lexmatch.questions import QuestionSplitter
+from lexmatch.smalltalk import SmallTalk
 from lexmatch.stopwords import STOPWORDS
 from lexmatch.text import normalize, query_terms
 
@@ -49,10 +55,13 @@ __all__ = [
     "MIN_CONTENT_OVERLAP",
     "STOPWORDS",
     "TERM_FREQUENCY_SATURATION",
+    "Corrections",
     "Entry",
     "Index",
     "LexmatchError",
     "QuestionSplitter",
+    "SmallTalk",
+    "SmallTalkError",
     "SynonymError",
     "Synonyms",
     "Tuning",
