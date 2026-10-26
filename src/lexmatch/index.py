@@ -31,6 +31,14 @@ from lexmatch.text import normalize
 _NEGLIGIBLE = 1e-9
 
 
+def _phrasing_tokens(entry: Entry) -> set[str]:
+    """Every word an entry's own question and aliases use."""
+    tokens: set[str] = set()
+    for phrase in (entry.question, *entry.aliases):
+        tokens |= set(normalize(phrase, keep_stopwords=True))
+    return tokens
+
+
 class Index:
     """A BM25 index over the owner's answers.
 
@@ -76,7 +84,23 @@ class Index:
         # meets a long form in an entry whichever one was written short.
         self._documents: list[list[str]] = [expand(entry.terms()) for entry in entries]
         self._phrases: list[list[str]] = [entry.asked_phrases() for entry in entries]
+        # The phrases as token sets, and their weight. Both are properties of
+        # the index, so computing them per query meant splitting every phrase
+        # of every entry on every reply and summing its weight again.
+        self._phrase_tokens: list[list[frozenset[str]]] = [
+            [frozenset(phrase.split()) for phrase in phrases] for phrases in self._phrases
+        ]
+        self._phrase_mass: list[list[float]] = []
         self._lengths: list[int] = [len(document) for document in self._documents]
+        # Which words each entry's own phrasings use, for holding a small-talk
+        # entry back from a substantive question. Built here rather than per
+        # query: deriving it in the scoring loop normalized every phrase of
+        # every entry on every reply, and took one reply against 5000 entries
+        # from 2.4 ms to 27 ms.
+        self._social_tokens: list[frozenset[str]] = [
+            frozenset(_phrasing_tokens(entry)) if SMALL_TALK_TAG in entry.tags else frozenset()
+            for entry in entries
+        ]
         self._average_length: float = (
             sum(self._lengths) / len(self._lengths) if self._lengths else 0.0
         )
@@ -122,13 +146,15 @@ class Index:
         # which had a bare index answering "who are you" with whatever came
         # first.
         comparable = self._comparable(asked) if content else asked
+        idf = self._inverse_document_frequency
+        query_mass = sum(idf.get(token, 0.0) for token in comparable)
         ranked = [
             (
                 max(
                     self._bm25(position, unique, ceiling) * specificity,
-                    self._phrase_score(position, comparable, content, asked),
+                    self._phrase_score(position, comparable, content, asked, query_mass),
                 )
-                * self._social_scale(entry, content),
+                * self._social_scale(position, content),
                 entry,
             )
             for position, entry in enumerate(self.entries)
@@ -385,8 +411,13 @@ class Index:
             for term, seen in document_frequency.items()
         }
         self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
+        idf = self._inverse_document_frequency
+        self._phrase_mass = [
+            [sum(idf.get(token, 0.0) for token in tokens) for tokens in per_entry]
+            for per_entry in self._phrase_tokens
+        ]
 
-    def _social_scale(self, entry: Entry, content_tokens: set[str]) -> float:
+    def _social_scale(self, position: int, content_tokens: set[str]) -> float:
         """Zero for a small-talk entry answering a substantive question.
 
         Social phrasings are short, and the length penalty favours short
@@ -404,28 +435,29 @@ class Index:
         suppressing it is what lets the consulting entry answer instead.
 
         Entries that are not small talk are unaffected, and which entries
-        count is `SMALL_TALK_TAG`, so a custom set can opt in or out.
+        count is `SMALL_TALK_TAG`, so a custom set can opt in or out. The
+        phrasings are tokenized at build time, in `_social_tokens`.
         """
-        if SMALL_TALK_TAG not in entry.tags or not content_tokens:
+        covered = self._social_tokens[position]
+        if not covered or not content_tokens:
             return 1.0
-        covered = self._entry_tokens(entry) - self.tuning.stopwords
         # An acknowledgement is social, not substantive, so it does not count
         # against small talk. "great, thanks" is one unit — a comma is not a
         # terminator — and "great" is in none of the thanks phrasings, which
         # suppressed a reply that was entirely correct. "is the pay good" is
         # still suppressed, because "pay" survives this.
-        uncovered = content_tokens - covered - QuestionSplitter.ACKNOWLEDGEMENTS
+        uncovered = (
+            content_tokens - covered - self.tuning.stopwords - QuestionSplitter.ACKNOWLEDGEMENTS
+        )
         return 0.0 if uncovered else 1.0
 
-    def _entry_tokens(self, entry: Entry) -> set[str]:
-        """Every token this entry's own phrasings use."""
-        tokens: set[str] = set()
-        for phrase in (entry.question, *entry.aliases):
-            tokens |= set(normalize(phrase, keep_stopwords=True))
-        return tokens
-
     def _weighted_dice(
-        self, shared: set[str], query_tokens: set[str], phrase_tokens: set[str]
+        self,
+        shared: set[str],
+        query_tokens: set[str],
+        phrase_tokens: frozenset[str],
+        query_mass: float,
+        phrase_mass: float,
     ) -> float:
         """Dice over the tokens' *weight* rather than their count.
 
@@ -442,6 +474,10 @@ class Index:
         almost nothing to either side, so a shared question form no longer
         looks like a shared subject.
 
+        The query's weight and each phrase's weight are passed in: the first
+        is constant for a query and the second is a property of the index, so
+        computing them here meant summing them again for every entry.
+
         The zero-weight fallback counts tokens instead. The `+ 1` guard in
         the inverse document frequency means a term in every entry still
         scores about 0.29, so this is unreachable with the built-in weights —
@@ -450,12 +486,10 @@ class Index:
         by it.
         """
         idf = self._inverse_document_frequency
-        shared_mass = sum(idf.get(token, 0.0) for token in shared)
-        total_mass = sum(idf.get(token, 0.0) for token in query_tokens) + sum(
-            idf.get(token, 0.0) for token in phrase_tokens
-        )
+        total_mass = query_mass + phrase_mass
         if total_mass <= _NEGLIGIBLE:
             return 2 * len(shared) / (len(query_tokens) + len(phrase_tokens))
+        shared_mass = sum(idf.get(token, 0.0) for token in shared)
         return 2 * shared_mass / total_mass
 
     def _comparable(self, tokens: set[str]) -> set[str]:
@@ -596,6 +630,7 @@ class Index:
         query_tokens: set[str],
         content_tokens: set[str],
         asked: set[str],
+        query_mass: float,
     ) -> float:
         """How closely the query matches how the question was *asked*.
 
@@ -630,12 +665,13 @@ class Index:
         # with no signal.
         #
         best = 0.0
-        for phrase in self._phrases[position]:
-            # Phrases are non-empty: an alias that normalizes to nothing is
-            # dropped when the index is built, so there is no empty set to
-            # guard against here.
-            phrase_tokens = set(phrase.split())
-            stopwords = self.tuning.stopwords
+        stopwords = self.tuning.stopwords
+        # Phrases are non-empty: an alias that normalizes to nothing is
+        # dropped when the index is built, so there is no empty set to guard
+        # against here. The tokens and their weight are built with the index.
+        for phrase_tokens, phrase_mass in zip(
+            self._phrase_tokens[position], self._phrase_mass[position], strict=True
+        ):
             # The constant described this guard but was never read: the
             # requirement was hard-coded at "any overlap at all", so a
             # caller who raised MIN_CONTENT_OVERLAP got no change. Reading it
@@ -657,5 +693,10 @@ class Index:
                 return 1.0
             shared = query_tokens & phrase_tokens
             if shared:
-                best = max(best, self._weighted_dice(shared, query_tokens, phrase_tokens))
+                best = max(
+                    best,
+                    self._weighted_dice(
+                        shared, query_tokens, phrase_tokens, query_mass, phrase_mass
+                    ),
+                )
         return best

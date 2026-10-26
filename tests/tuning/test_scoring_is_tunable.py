@@ -130,8 +130,9 @@ class TestTheOverlapGuardIsNowRead:
         # so the guard can be exercised without the whole pass.
         asked = {"notice", "of", "termination"}
         content = asked - loose.tuning.stopwords
-        assert loose._phrase_score(0, asked, content, asked) > 0
-        assert strict._phrase_score(0, asked, content, asked) == 0
+        mass = sum(loose._inverse_document_frequency.get(token, 0.0) for token in asked)
+        assert loose._phrase_score(0, asked, content, asked, mass) > 0
+        assert strict._phrase_score(0, asked, content, asked, mass) == 0
 
     def test_zero_lets_a_query_match_on_filler(self):
         index = Index(DILUTED, tuning=Tuning(minimum_overlap=0))

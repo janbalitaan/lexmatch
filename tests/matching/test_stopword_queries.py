@@ -75,7 +75,7 @@ class TestPhraseScoringEdges:
         once per entry, so the empty case is passed in rather than derived.
         """
         index = Index(entries)
-        assert index._phrase_score(0, set(), set(), set()) == 0.0
+        assert index._phrase_score(0, set(), set(), set(), 0.0) == 0.0
 
     def test_a_query_of_only_punctuation_is_refused(self, entries):
         """Through the public API it is refused before scoring."""
@@ -129,7 +129,11 @@ class TestTheWeightedOverlapFallsBackOnZeroWeight:
             index._inverse_document_frequency, 0.0
         )
         shared = {"remote", "work"}
-        score = index._weighted_dice(shared, shared | {"pay"}, shared | {"open"})
+        # The masses are passed in now, built with the index. Zero for both
+        # is what a replaced weight table produces, which is the case here.
+        score = index._weighted_dice(
+            shared, shared | {"pay"}, frozenset(shared | {"open"}), 0.0, 0.0
+        )
         assert score == 2 * 2 / (3 + 3)
 
     def test_a_zeroed_table_does_not_raise_through_score(self):

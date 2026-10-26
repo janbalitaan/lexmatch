@@ -38,6 +38,12 @@ caller is listed under **Changed** with what to do about it.
     acknowledgement is no longer a question — "great, thanks!" was answered
     correctly while "great" was reported as unanswered, which made a right
     answer look like a partial failure.
+- Each phrase's token set and weight are built with the index, and the
+  query's weight once per query. Deriving them inside the ranking loop meant
+  splitting every phrase of every entry and summing its weight again on every
+  reply — 2.95 million `sum` calls per hundred replies against 5000 entries.
+  A reply on the default path costs 18.0 ms against 5000 entries, down from
+  24.7 ms, and the weighting itself costs 1.2 ms of that.
 - `ambiguity_floor` lowered from 0.65 to 0.50. It was set when a four-way tie
   at 0.537 produced a nonsense clarifying question; weighting the overlap
   removed that tie — the same query now scores 0.921 against one entry and
