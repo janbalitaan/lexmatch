@@ -53,6 +53,9 @@ select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C4", "SIM", "TID", "PTH",
 ignore = ["D107", "D203", "D213"]
 
 [tool.ruff.lint.per-file-ignores]
+# Examples are illustrative scripts, with the same exemptions as the tests
+# and for the same reason: they demonstrate rather than implement.
+"examples/*" = ["S", "D", "T201", "INP001", "E402"]
 "tests/*" = ["S", "PLR2004", "ARG", "D"]
 
 [tool.ruff.lint.flake8-tidy-imports]

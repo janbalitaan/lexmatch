@@ -36,8 +36,9 @@ from lexmatch.constants import (
     MIN_CONTENT_OVERLAP,
     TERM_FREQUENCY_SATURATION,
 )
+from lexmatch.exceptions import LexmatchError, TuningError
 from lexmatch.index import Index
-from lexmatch.models import Entry
+from lexmatch.models import Entry, Tuning
 from lexmatch.stopwords import STOPWORDS
 from lexmatch.text import normalize, query_terms
 

@@ -71,6 +71,20 @@ are weighted as heavily as the question itself.
 | `TERM_FREQUENCY_SATURATION` | `1.4` | Above this, repeating a term stops helping. |
 | `LENGTH_PENALTY` | `0.72` | How much long entries are discounted. |
 
+## Documentation
+
+| Page | |
+| --- | --- |
+| [Getting started](https://github.com/janbalitaan/lexmatch/blob/main/docs/getting-started.md) | An index, a query, an answer |
+| [How scoring works](https://github.com/janbalitaan/lexmatch/blob/main/docs/scoring.md) | BM25, phrase overlap, and why both |
+| [Refusing to answer](https://github.com/janbalitaan/lexmatch/blob/main/docs/refusing.md) | The threshold, and why a wrong answer is worse |
+| [Aliases](https://github.com/janbalitaan/lexmatch/blob/main/docs/aliases.md) | Where most of the accuracy comes from |
+| [Tuning](https://github.com/janbalitaan/lexmatch/blob/main/docs/tuning.md) | Every number, and when to move it |
+| [API reference](https://github.com/janbalitaan/lexmatch/blob/main/docs/api.md) | Everything importable |
+| [Limitations](https://github.com/janbalitaan/lexmatch/blob/main/docs/limitations.md) | What to use instead, and when |
+
+Runnable [examples](https://github.com/janbalitaan/lexmatch/blob/main/examples) too.
+
 ## Install
 
 ```bash
