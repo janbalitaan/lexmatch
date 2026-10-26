@@ -33,7 +33,7 @@ FAQ.
 
 ## One language's worth of stopwords
 
-The 109 shipped stopwords are English. For another language the list is wrong
+The 128 shipped stopwords are English. For another language the list is wrong
 in both directions — it removes nothing it should and keeps everything it
 should not:
 

@@ -6,7 +6,13 @@ import re
 from typing import ClassVar
 import unicodedata
 
+from lexmatch.contractions import Contractions
 from lexmatch.stopwords import STOPWORDS
+
+#: Every apostrophe a keyboard or a word processor produces, mapped away.
+#: The curly ones arrive from anything that autocorrects, which is most
+#: phones.
+_APOSTROPHES = str.maketrans(dict.fromkeys("'\u2019\u02bc\u055a\uff07", ""))
 
 
 class Tokenizer:
@@ -33,7 +39,22 @@ class Tokenizer:
         """
         text = unicodedata.normalize("NFKD", text.lower())
         text = "".join(char for char in text if not unicodedata.combining(char))
+        # Apostrophes go before splitting, not after. The word pattern does
+        # not include one, so it *split* on it: "don't" became "don" and a
+        # dropped "t", "you've" became "you" and "ve", and "what's" became
+        # "what". The apostrophe form is the one people actually type, and it
+        # was being handled worse than the stripped one — removing it first
+        # turns both into "dont", which the contraction table expands.
+        #
+        # A possessive collapses the same way: "company's rate" becomes
+        # "companys rate", and stemming folds that onto "company".
+        text = text.translate(_APOSTROPHES)
         words = [word for word in cls._WORD.findall(text) if len(word) > 1]
+        # The apostrophe is gone by now, so "don't" is "dont" — a token in no
+        # stopword list and in no entry, which the weighting would treat as
+        # one of the most discriminating words there is. Expanded into the
+        # words it stands for, which are ordinary stopwords.
+        words = Contractions.expand(words)
         if keep_stopwords:
             return words
         return [word for word in words if word not in STOPWORDS]

@@ -141,5 +141,34 @@ STOPWORDS = frozenset(
         "usually",
         "view",
         "want",
+        # Placeholder nouns: the words a question uses when it has no word
+        # for what it means. "thing" scored 3.06 against a twenty-five entry
+        # index — as discriminating as the rarest real term there — so
+        # "whats the biggest thing youve built" spent a third of its weight
+        # on a word that says nothing, and the entry it should have matched
+        # lost to one sharing "build".
+        #
+        # Not here, because they are the subject of real questions: "time"
+        # (what time zone), "place", "point", "level", "number", "amount",
+        # "case", "part", "area", "matter", "item", "side", "type".
+        "anybody",
+        "anyone",
+        "anything",
+        "bit",
+        "everybody",
+        "everyone",
+        "everything",
+        "kind",
+        "lot",
+        "lots",
+        "nothing",
+        "someone",
+        "something",
+        "sort",
+        "stuff",
+        "thing",
+        "things",
+        "way",
+        "ways",
     ]
 )

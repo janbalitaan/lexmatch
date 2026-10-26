@@ -29,6 +29,8 @@ PHRASINGS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "greetings",
             "yo",
             "howdy",
+            "sup",
+            "alright",
         ),
         "farewell": (
             "goodbye",
@@ -49,6 +51,14 @@ PHRASINGS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "appreciate it",
             "cheers",
             "ta",
+            # How it is typed rather than written. A bot that refuses "thx"
+            # reads as broken for the same reason one that refuses "thanks"
+            # does: the visitor knows they said something ordinary.
+            "thx",
+            "thanx",
+            "tnx",
+            "ty",
+            "nice one",
         ),
         "identity": (
             "who are you",
@@ -58,6 +68,11 @@ PHRASINGS: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "are you a real person",
             "are you an ai",
             "what is this",
+            "are you a robot",
+            "are you real",
+            "bot or human",
+            "who made you",
+            "who built you",
         ),
         "capability": (
             "what can you do",

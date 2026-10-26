@@ -30,6 +30,9 @@ from lexmatch.text import normalize
 # stopwords, which falls back to counting tokens.
 _NEGLIGIBLE = 1e-9
 
+# Two distinct answers from one message means it really asked two things.
+_TWO_QUESTIONS = 2
+
 
 def _phrasing_tokens(entry: Entry) -> set[str]:
     """Every word an entry's own question and aliases use."""
@@ -211,37 +214,66 @@ class Index:
         # is two regular expressions; `_best_reading` on a single question
         # scored every entry two or three times for nothing, which took a
         # reply against 5000 entries from 18 ms to 36.
-        if QuestionSplitter.looks_compound(query):
-            answered = self._best_reading(query)[1]
-            # Compared by identity: Entry holds lists, so it is unhashable
-            # and a set of them cannot be built.
-            distinct = {id(entry) for entry, _ in answered}
-            if len(distinct) > 1:
-                # Two questions, not one ambiguous question. Ambiguity is
-                # *one* question matching two entries; asking which was meant
-                # when two were asked answers neither.
-                #
-                # Measured: "yoe and tech stack?" tied at 0.586 between the
-                # experience and stack entries and asked which was meant,
-                # while `answers()` on the same message had already resolved
-                # it to both. `reply()` scored the whole string and never
-                # consulted the reading, so the two disagreed about a message
-                # a recruiter would send first.
-                # The substantive part leads, not whichever came first.
-                # "Hi — do you have capacity for three months?" answers the
-                # greeting and the question both, and headlining the greeting
-                # reads as having ignored the question: measured, two such
-                # messages were answered with "Hello." at 1.000 while the real
-                # answer sat in `alternatives`.
-                ordered = sorted(answered, key=self._social_last)
-                first, first_score = ordered[0]
-                return Reply(
-                    outcome=Outcome.ANSWERED,
-                    entry=first,
-                    score=first_score,
-                    alternatives=tuple(entry for entry, _ in ordered[1:]),
-                )
-        return self._reply_to_one(query)
+        if not QuestionSplitter.looks_compound(query):
+            return self._reply_to_one(query)
+
+        answered = self._best_reading(query)[1]
+        distinct = {id(entry) for entry, _ in answered}
+        if len(distinct) >= _TWO_QUESTIONS:
+            return self._compound_reply(answered)
+        # Scored only now. When the strict split is a single part it *is* the
+        # whole string, so `_best_reading` has already scored it — computing
+        # it up front scored every entry twice and took a compound message
+        # against 5000 entries to 41.6 ms.
+        whole = self._reply_to_one(query)
+        # A greeting is not a rescue. "Good afternoon. What is the largest
+        # system you have personally designed?" splits into a pleasantry that
+        # answers and a question that does not, and answering it "Hello" at
+        # 1.000 is worse than refusing — it reads as not having noticed the
+        # question. So a rescue needs something substantive to rescue with.
+        substantive = any(SMALL_TALK_TAG not in entry.tags for entry, _ in answered)
+        rescues = substantive and not whole.answered
+        if not rescues:
+            # The message splits, but reading it in parts says nothing the
+            # whole string did not. Two conditions, and each is a measured
+            # case rather than a precaution.
+            #
+            # **Two distinct answers** means it really was two questions:
+            # "yoe and tech stack?" tied at 0.586 between the experience and
+            # stack entries and asked which was meant, while `answers()` had
+            # already resolved it to both. Ambiguity is *one* question
+            # matching two entries; asking which was meant when two were
+            # asked answers neither.
+            #
+            # **A rescue** is a part that answers where the whole string
+            # would not: "I don't need visa sponsorship, what's the stack?"
+            # was reported NEGATED, because the first clause's "not" was read
+            # against the second clause's answer.
+            #
+            # Overriding a whole-string reply that *did* answer costs more
+            # than it gains — it fell from 65.9% to 61.0% across fifteen
+            # simulated visitors, because a message that splits is usually
+            # still one question.
+            return whole
+        return self._compound_reply(answered)
+
+    def _compound_reply(self, answered: list[tuple[Entry, float]]) -> Reply:
+        """Build one reply out of the answers to a message's parts.
+
+        The substantive part leads, not whichever came first. "Hi — do you
+        have capacity for three months?" answers the greeting and the
+        question both, and headlining the greeting reads as having ignored
+        the question: two such messages were answered "Hello." at 1.000 while
+        the real answer sat in `alternatives`.
+        """
+        ordered = sorted(answered, key=self._social_last)
+        first, first_score = ordered[0]
+        return Reply(
+            outcome=Outcome.ANSWERED,
+            entry=first,
+            score=first_score,
+            alternatives=tuple(entry for entry, _ in ordered[1:]),
+        )
 
     @staticmethod
     def _social_last(answered: tuple[Entry, float]) -> tuple[bool, float]:

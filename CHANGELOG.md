@@ -10,6 +10,47 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- **Informal writing is read properly.** Three defects, and together they
+  cost more accuracy than anything else measured: across twenty informally
+  written questions, **65% answered before and 95% after**, with every other
+  benchmark unchanged.
+  - An **apostrophe split the word**, because the word pattern does not
+    include one: "don't" became `don` with the "t" dropped as too short,
+    "you've" became `you` and `ve`. The form people actually type was handled
+    worse than the stripped form. Apostrophes are removed before splitting
+    now, curly ones included, since those arrive from anything that
+    autocorrects.
+  - A **contraction read as an unknown word**, which is the rarest kind of
+    word there is, so the weighting treated it as one of the most
+    discriminating terms in the query — `youv` scored 3.06 against a
+    twenty-five entry index, the same as the rarest real term. Each is
+    replaced by the words it stands for, which are ordinary stopwords.
+    `Contractions.FORMS` is replaceable, and ambiguous forms are deliberately
+    absent because "ill", "well", "id", "wed" and "lets" are words.
+  - A **tag question was read as a negative**. English tag questions confirm
+    the clause before them — "you've led teams before, haven't you?" expects
+    yes — and five of twenty questions matched **perfectly, at 1.000, and
+    were thrown away**. A negated auxiliary followed by a pronoun at the end
+    of a message is affirmative now, and so is a polite request at the start
+    ("can't you start sooner?" asks for the notice period). A genuine
+    negative is untouched.
+- Nineteen placeholder nouns are stopwords: "thing", "stuff", "something",
+  "way", "kind", "sort". "thing" scored 3.06 against a twenty-five entry
+  index — as discriminating as the rarest real term there — so "whats the
+  biggest thing youve built" spent a third of its weight on a word that says
+  nothing. Not included: "time", "place", "point", "level", "number", "case",
+  "part", "area" — those are the subject of real questions.
+- `SmallTalk.PHRASINGS` gained the short forms people type: `thx`, `ty`,
+  `tnx`, `sup`, `are you a robot`, `bot or human`, `who made you`.
+- `reply()` reads a multi-part message as parts when that says something the
+  whole string did not — either two distinct answers, or a part that answers
+  where the whole string refused. "I don't need visa sponsorship, what's the
+  stack?" was reported NEGATED, because the first clause's "not" was read
+  against the second clause's answer. A pleasantry does not count as a
+  rescue: answering "Good afternoon. What is the largest system you have
+  designed?" with "Hello" at 1.000 is worse than refusing. Overriding a
+  whole-string reply that *did* answer was measured and rejected — it cost
+  4.9 points across fifteen simulated visitors.
 - **Inflections fold onto one token.** "consulting" and "consult" were
   different words, and so were "built" and "build", "rates" and "rate". The
   documentation said an alias was cheaper and exact, which holds for twenty

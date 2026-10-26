@@ -34,9 +34,54 @@ class Negation:
         re.IGNORECASE,
     )
 
+    # The negated auxiliaries, spelled as they are actually written. Built
+    # once and shared by the patterns below, because the spellings are not
+    # derivable: "can't" stripped of its apostrophe is "cant", where the "n"
+    # belongs to "can" — assembling it as "can" + "n't" matches "cannt" and
+    # misses every real one.
+    _AUXILIARIES = (
+        r"isn'?t|aren'?t|wasn'?t|weren'?t|don'?t|doesn'?t|didn'?t|won'?t|"
+        r"wouldn'?t|can'?t|couldn'?t|shouldn'?t|haven'?t|hasn'?t|hadn'?t"
+    )
+
+    # A negated auxiliary followed by a pronoun at the very end: "..., isn't
+    # it?", "..., haven't you?". English tag questions *confirm* the clause
+    # before them, so they are affirmative — "you've led teams before,
+    # haven't you?" expects "yes".
+    _TAG_QUESTION = re.compile(
+        rf"\b(?:{_AUXILIARIES})\s+(?:it|you|they|we|he|she|there|that|this)\b\W*$",
+        re.IGNORECASE,
+    )
+
+    # "Can't you start sooner?", "Couldn't you reduce the cost?" — a request
+    # phrased as a negative, which asks for the thing rather than denying it.
+    # Only at the start, so "are you not able to start" stays negative.
+    _POLITE_REQUEST = re.compile(
+        r"^\W*(?:can'?t|couldn'?t|wouldn'?t)\s+(?:you|we|i)\b",
+        re.IGNORECASE,
+    )
+
     @classmethod
     def present_in(cls, text: str) -> bool:
-        """Whether this text asks something in the negative."""
+        """Whether this text asks something in the negative.
+
+        Two shapes that contain a negation and do not mean one are excluded.
+
+        A **tag question** confirms rather than denies: "you're open to
+        remote, aren't you?" expects "yes", and reporting it as negative
+        inverted an answer that was already right. Measured across twenty
+        informally written questions, five were tag questions and every one
+        was refused at a score of 1.000 — the match was perfect and the
+        outcome threw it away.
+
+        A **polite request** asks for the thing: "can't you start sooner?"
+        wants the notice period, not a denial of it.
+
+        Both patterns are class attributes, so a corpus where they read
+        differently can replace them.
+        """
+        if cls._TAG_QUESTION.search(text) or cls._POLITE_REQUEST.search(text):
+            return False
         return bool(cls._NEGATIONS.search(text))
 
     @classmethod
