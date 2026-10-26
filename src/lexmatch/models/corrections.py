@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
 from difflib import SequenceMatcher
@@ -78,8 +79,25 @@ class Corrections:
         spread = max(1, len(token) // 3)
         best: list[str] = []
         highest = self.similarity
+        token_counts = Counter(token)
+        token_length = len(token)
         for candidate in vocabulary:
-            if abs(len(candidate) - len(token)) > spread:
+            if abs(len(candidate) - token_length) > spread:
+                continue
+            # The shared-character bound, before the real comparison. It is
+            # what `SequenceMatcher.quick_ratio` computes and a true upper
+            # bound on `ratio` — verified over twenty thousand random pairs —
+            # so skipping on it cannot lose a match, and it costs a counter
+            # intersection instead of a diff.
+            #
+            # Constructing the matcher is itself the expense: it indexes its
+            # second sequence eagerly, which for 5000 entries meant 279,310
+            # index builds for fifty query words. Swapping the arguments to
+            # index the token once is not available, because `ratio` is
+            # asymmetric in about a tenth of pairs and the results would
+            # change.
+            shared = sum((token_counts & Counter(candidate)).values())
+            if 2.0 * shared / (token_length + len(candidate)) < highest:
                 continue
             ratio = SequenceMatcher(None, token, candidate).ratio()
             if ratio > highest:

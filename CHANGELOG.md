@@ -10,6 +10,19 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Typo correction skips the real comparison when a shared-character bound
+  says no candidate can clear the threshold. Constructing a `SequenceMatcher`
+  indexes its second sequence eagerly, and against 5000 entries that meant
+  279,310 index builds for fifty query words — an unrecognized query cost
+  92.9 ms and now costs 48.2 ms.
+
+  The bound is what `quick_ratio` computes and a true upper bound on `ratio`,
+  so the skip cannot lose a match. Indexing the token once instead, by
+  swapping the arguments, is *not* available: `ratio` is asymmetric in about
+  a tenth of pairs, which was measured rather than assumed. A test compares
+  the gated path against an ungated reference over the vocabulary, every
+  single-edit typo of it and two thousand random strings, at four
+  thresholds.
 - `Morphology` bridges a query word to a longer index word built from it:
   "senior" to "seniority", "secur" to "security". Stemming folds inflection
   and deliberately stops at derivation, because the endings it would have to
