@@ -6,9 +6,9 @@ caller is listed under **Changed** with what to do about it.
 
 ## [Unreleased]
 
-## [0.1.0] — 2026-10-26
+## [0.1.1] — 2026-10-26
 
-### Added
+### Changed
 
 - Five placeholder pronouns are stopwords: "other", "others", "another",
   "same", "such". They stand in for something already mentioned, and with no
@@ -21,6 +21,12 @@ caller is listed under **Changed** with what to do about it.
   and "One month." is an answer, and dropping the word cost a question a real
   manager asked while saving one only a follow-up would. `limitations.md` has
   the rest, which needs state rather than a word list.
+
+
+## [0.1.0] — 2026-10-26
+
+### Added
+
 - **A question asked in an entry's own words is recognized as one.** A query
   contained in one of an entry's phrasings is scored on its coverage of that
   phrasing, which the weighted comparison cannot see when the shared words
