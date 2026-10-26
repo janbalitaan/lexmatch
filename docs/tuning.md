@@ -28,7 +28,7 @@ index cannot have its scoring altered after it was built.
 | `length_penalty` | 0.72 | how much a long entry is penalized. BM25's *b* |
 | `minimum_overlap` | 1 | substantive words a phrase must share before it scores |
 | `ambiguity_margin` | 0.05 | how close a runner-up has to be to count as a tie |
-| `ambiguity_floor` | 0.65 | how confident a tie has to be to be worth asking about |
+| `ambiguity_floor` | 0.50 | how confident a tie has to be to be worth asking about |
 | `stopwords` | 77 words | words carrying no signal |
 | `synonyms` | none | words read as each other. See [synonyms](synonyms.md) |
 | `corrections` | on | mistyped words read as real ones. See [typos](typos.md) |
@@ -43,19 +43,31 @@ Lower it when entries are deliberately uneven in length and you do not want
 the short ones favoured. The default leans toward shorter entries, which is
 right when entries are questions and wrong when they are paragraphs.
 
-**`minimum_overlap`** — raise it to 2 for an index whose entries share a lot
-of vocabulary. With four entries all beginning *"What is your rate for…"*, a
-query of *"what is your rate for consulting"* scores 0.833 at the default and
-is refused at 2, because sharing one diluted word is not enough to be sure:
+**`minimum_overlap`** — how many substantive words a query and an entry must
+share before the phrase scorer will consider them related at all. Raise it to
+2 for an index whose entries share a lot of vocabulary.
+
+With four entries all beginning *"What is your rate for…"*, a query of
+*"what is your rate for consulting"* scores 0.446 at the default and 0.084 at
+2, because sharing one diluted word is not enough to be sure:
 
 ```
-minimum_overlap=1   0.833   answered
-minimum_overlap=2   0.084   refused
+minimum_overlap=1   0.446
+minimum_overlap=2   0.084
 ```
+
+Both are refused at the default 0.45 threshold, which is the more useful
+lesson: in an index of near-duplicate entries, every shared word has a low
+inverse document frequency, so **nothing scores well and no tuning fixes it**.
+Four entries that differ by one word each are better written as one entry
+with four aliases.
 
 Its effect is often hidden, because BM25 usually wins the maximum when there
 are substantive words in common. It decides when the phrase scorer would
 otherwise win on thin overlap.
+
+The guard does not apply to a query with no substantive words at all — see
+the stopword note below, and `limitations.md`.
 
 ## Stopwords
 
@@ -101,7 +113,7 @@ as "my questions are worded badly" rather than as a configuration error.
 ```python
 index.tuning.describe()
 # threshold 0.45, saturation 1.4, length penalty 0.72
-# minimum overlap 1, ambiguity margin 0.05, ambiguity floor 0.65
+# minimum overlap 1, ambiguity margin 0.05, ambiguity floor 0.5
 # 77 stopwords, 0 synonyms, typo correction at 0.8 similarity
 # 4 characters and up
 ```

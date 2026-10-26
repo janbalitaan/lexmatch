@@ -51,7 +51,11 @@ class TestTheProblemAnswersSolves:
     def test_a_three_part_message_degrades_every_score(self, index):
         """The arithmetic, demonstrated rather than asserted."""
         whole = index.score("remote? rates? notice period?")
-        assert whole[0][0] < 0.5, "the best score should have degraded"
+        alone = index.score("remote")[0][0]
+        assert whole[0][0] < alone, (
+            f"asking three things at once scored {whole[0][0]:.3f}, no worse "
+            f"than asking one ({alone:.3f}) — the dilution is the premise"
+        )
         assert whole[1][0] < index.threshold, "the second should fall below"
         assert whole[2][0] < index.threshold, "and the third"
 

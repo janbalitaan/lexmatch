@@ -32,14 +32,14 @@ The three failures look identical through `answer()` and are not:
 | a negative question | **the affirmative answer** | nothing confident |
 
 The middle row is the one that matters most, and it did not even return
-`None`. Two entries tied at **0.727** and `answer()` picked the first — a
+`None`. Two entries tied at **0.580** and `answer()` picked the first — a
 confident wrong answer half the time, with no way for the visitor to tell
 which half they got.
 
 ```
 'what is your rate'
-  0.727  What is your rate for design work?
-  0.727  What is your rate for review work?
+  0.580  What is your rate for design work?
+  0.580  What is your rate for review work?
 ```
 
 The bottom row is worse in a different way. "Are you **not** open to remote
@@ -87,14 +87,14 @@ Only entries that **cleared the threshold** can be contenders — an entry
 scoring zero is not a candidate however wide the margin.
 
 Raise it to ask for clarification more often, lower it toward 0 to only
-catch an exact tie. Zero still catches the 0.727 tie above, because that is
+catch an exact tie. Zero still catches the 0.580 tie above, because that is
 exact.
 
 ## Logging a turn
 
 ```python
 log.info("lexmatch: %s", reply.describe())
-# lexmatch: ambiguous, score 0.727, 2 alternatives, 2 suggestions
+# lexmatch: ambiguous, score 0.580, 2 alternatives, 2 suggestions
 ```
 
 `describe()` carries the outcome and the shape of the result and **no

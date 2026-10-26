@@ -81,3 +81,57 @@ Entry(question=greeting[0], answer="Hello!", aliases=[*greeting[1:], "aloha", "s
 
 The shipped phrasings are a starting point, not a boundary. Build the entry
 yourself when you want more.
+
+
+## Small talk answers small talk, and nothing else
+
+A social phrasing is short, and the length penalty favours short entries, so
+an entry built from "take care" or "good morning" would otherwise win any
+message containing "care" or "good". Measured over fifteen simulated visitors,
+five real questions were answered with a pleasantry:
+
+```
+'is the pay good'                        ->  "Hello."       1.000
+'do you care about the frontend at all'  ->  "Take care."   0.957
+'hi do u do consulting'                  ->  "Hello."       0.915
+```
+
+So a small-talk entry may only answer when every substantive word in the
+message is one its own phrasings use. `hello` and `yo` pass. `hi do you do
+consulting` does not, because `consulting` is in none of the greeting
+phrasings — and holding the greeting back is what lets the consulting entry
+answer instead.
+
+Which entries this applies to is `SMALL_TALK_TAG`, the tag `SmallTalk.entries`
+adds. Tag your own entries with it to get the same treatment:
+
+```python
+from lexmatch.constants import SMALL_TALK_TAG
+
+Entry(
+    question="no problem",
+    answer="Any time.",
+    aliases=["no worries", "all good"],
+    tags=[SMALL_TALK_TAG, "acknowledgement"],
+)
+```
+
+### Acknowledgements
+
+An acknowledgement is social rather than substantive, so it neither holds back
+small talk nor counts as a question of its own. "great, thanks!" is one unit —
+a comma is not a terminator — and answering it with "You're welcome." while
+reporting "great" as unanswered made a wholly correct reply look like a
+partial failure.
+
+`QuestionSplitter.ACKNOWLEDGEMENTS` holds the set, and replacing it changes
+what counts:
+
+```python
+from lexmatch import QuestionSplitter
+
+QuestionSplitter.ACKNOWLEDGEMENTS = frozenset({"great", "ta", "nice one"})
+```
+
+A word in the set only counts when it is the whole part. "is the pay good" is
+one question, not an acknowledgement, because "good" is inside a sentence.

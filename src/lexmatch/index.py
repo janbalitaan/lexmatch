@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 
 from lexmatch.composer import Composer
-from lexmatch.constants import AMBIGUITY_ALTERNATIVES
+from lexmatch.constants import AMBIGUITY_ALTERNATIVES, SMALL_TALK_TAG
 from lexmatch.models.entry import Entry
 from lexmatch.models.outcome import Outcome
 from lexmatch.models.reply import Reply
@@ -24,6 +24,11 @@ from lexmatch.models.tuning import Tuning
 from lexmatch.negation import Negation
 from lexmatch.questions import QuestionSplitter
 from lexmatch.text import normalize
+
+# Below this, a total IDF weight is indistinguishable from zero and the
+# weighted ratio would divide by it. Reached only by a query of nothing but
+# stopwords, which falls back to counting tokens.
+_NEGLIGIBLE = 1e-9
 
 
 class Index:
@@ -121,8 +126,9 @@ class Index:
             (
                 max(
                     self._bm25(position, unique, ceiling) * specificity,
-                    self._phrase_score(position, comparable, content),
-                ),
+                    self._phrase_score(position, comparable, content, asked),
+                )
+                * self._social_scale(entry, content),
                 entry,
             )
             for position, entry in enumerate(self.entries)
@@ -380,6 +386,78 @@ class Index:
         }
         self._max_idf: float = max(self._inverse_document_frequency.values(), default=1.0)
 
+    def _social_scale(self, entry: Entry, content_tokens: set[str]) -> float:
+        """Zero for a small-talk entry answering a substantive question.
+
+        Social phrasings are short, and the length penalty favours short
+        entries, so a message that merely contains a pleasantry was being
+        answered by one. Measured over fifteen simulated visitors: "is the
+        pay good" scored 1.000 against the greeting entry because "good"
+        matches "good morning", and "do you care about the frontend at all"
+        scored 0.957 against the farewell because "care" matches "take care".
+        Both are real questions that happen to contain a social word.
+
+        A small-talk entry may only answer when the message is small talk:
+        every substantive word in the query has to be one the entry's own
+        phrasings use. "hello" and "yo" pass. "hi do u do consulting" does
+        not, because "consulting" is nowhere in the greeting phrasings — and
+        suppressing it is what lets the consulting entry answer instead.
+
+        Entries that are not small talk are unaffected, and which entries
+        count is `SMALL_TALK_TAG`, so a custom set can opt in or out.
+        """
+        if SMALL_TALK_TAG not in entry.tags or not content_tokens:
+            return 1.0
+        covered = self._entry_tokens(entry) - self.tuning.stopwords
+        # An acknowledgement is social, not substantive, so it does not count
+        # against small talk. "great, thanks" is one unit — a comma is not a
+        # terminator — and "great" is in none of the thanks phrasings, which
+        # suppressed a reply that was entirely correct. "is the pay good" is
+        # still suppressed, because "pay" survives this.
+        uncovered = content_tokens - covered - QuestionSplitter.ACKNOWLEDGEMENTS
+        return 0.0 if uncovered else 1.0
+
+    def _entry_tokens(self, entry: Entry) -> set[str]:
+        """Every token this entry's own phrasings use."""
+        tokens: set[str] = set()
+        for phrase in (entry.question, *entry.aliases):
+            tokens |= set(normalize(phrase, keep_stopwords=True))
+        return tokens
+
+    def _weighted_dice(
+        self, shared: set[str], query_tokens: set[str], phrase_tokens: set[str]
+    ) -> float:
+        """Dice over the tokens' *weight* rather than their count.
+
+        Counting tokens equally treats "how do you" exactly like "refactor",
+        and most questions in an index share a form. Measured over eleven
+        professional roles, "how do you mentor juniors" scored **1.000**
+        against the small-talk entry "how are you" — two of three tokens
+        shared, none of them meaning anything — and "how do you decide when
+        to refactor" scored 0.890 against "How do you decide build versus
+        buy" on the shared "how do you decide".
+
+        Weighting by inverse document frequency is the same ratio over the
+        information each token carries: a word in every entry contributes
+        almost nothing to either side, so a shared question form no longer
+        looks like a shared subject.
+
+        The zero-weight fallback counts tokens instead. The `+ 1` guard in
+        the inverse document frequency means a term in every entry still
+        scores about 0.29, so this is unreachable with the built-in weights —
+        it is here because the weights are a plain mapping a developer can
+        replace, and one that returns zero for a token would otherwise divide
+        by it.
+        """
+        idf = self._inverse_document_frequency
+        shared_mass = sum(idf.get(token, 0.0) for token in shared)
+        total_mass = sum(idf.get(token, 0.0) for token in query_tokens) + sum(
+            idf.get(token, 0.0) for token in phrase_tokens
+        )
+        if total_mass <= _NEGLIGIBLE:
+            return 2 * len(shared) / (len(query_tokens) + len(phrase_tokens))
+        return 2 * shared_mass / total_mass
+
     def _comparable(self, tokens: set[str]) -> set[str]:
         """Drop query words that appear in no entry at all.
 
@@ -513,7 +591,11 @@ class Index:
         return min(total / ceiling, 1.0)
 
     def _phrase_score(
-        self, position: int, query_tokens: set[str], content_tokens: set[str]
+        self,
+        position: int,
+        query_tokens: set[str],
+        content_tokens: set[str],
+        asked: set[str],
     ) -> float:
         """How closely the query matches how the question was *asked*.
 
@@ -553,8 +635,6 @@ class Index:
             # dropped when the index is built, so there is no empty set to
             # guard against here.
             phrase_tokens = set(phrase.split())
-            if query_tokens == phrase_tokens:
-                return 1.0
             stopwords = self.tuning.stopwords
             # The constant described this guard but was never read: the
             # requirement was hard-coded at "any overlap at all", so a
@@ -564,8 +644,18 @@ class Index:
             shared_content = content_tokens & (phrase_tokens - stopwords)
             if content_tokens and len(shared_content) < self.tuning.minimum_overlap:
                 continue
-            shared = len(query_tokens & phrase_tokens)
+            # The exact-match shortcut is checked *after* the guard and
+            # against what was **asked**, not against what survived
+            # filtering. Both were wrong before, and together they scored
+            # "how do you mentor juniors" at 1.000 against the small-talk
+            # alias "how do you do": "mentor" and "juniors" are not in this
+            # index's vocabulary, so the comparable set was filtered down to
+            # the filler `{how, do, you}` — which equalled that alias
+            # exactly, and the shortcut returned before the guard could
+            # object that no substantive word was shared.
+            if asked == phrase_tokens:
+                return 1.0
+            shared = query_tokens & phrase_tokens
             if shared:
-                dice = 2 * shared / (len(query_tokens) + len(phrase_tokens))
-                best = max(best, dice)
+                best = max(best, self._weighted_dice(shared, query_tokens, phrase_tokens))
         return best

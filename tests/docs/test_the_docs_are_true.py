@@ -149,9 +149,12 @@ class TestTheWorkedExamplesRun:
         query = "what is your rate for consulting"
         loose = Index(entries, tuning=Tuning(minimum_overlap=1))
         strict = Index(entries, tuning=Tuning(minimum_overlap=2))
-        assert abs(loose.score(query)[0][0] - 0.833) < 0.001
+        assert abs(loose.score(query)[0][0] - 0.446) < 0.001
         assert abs(strict.score(query)[0][0] - 0.084) < 0.001
-        assert loose.answer(query)[0] is not None
+        # Both are refused at the default threshold, which the doc now says
+        # outright. It used to claim the loose one was answered, which was
+        # true only while phrase overlap counted tokens equally.
+        assert loose.answer(query)[0] is None
         assert strict.answer(query)[0] is None
 
     def test_describe_matches_the_quoted_line(self):

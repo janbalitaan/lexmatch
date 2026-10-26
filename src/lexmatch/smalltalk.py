@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
+from lexmatch.constants import SMALL_TALK_TAG
 from lexmatch.exceptions import SmallTalkError
 from lexmatch.models.entry import Entry
 
@@ -125,7 +126,7 @@ class SmallTalk:
                     question=phrasings[0],
                     answer=reply,
                     aliases=list(phrasings[1:]),
-                    tags=["smalltalk", intent],
+                    tags=[SMALL_TALK_TAG, intent],
                 )
             )
         return built

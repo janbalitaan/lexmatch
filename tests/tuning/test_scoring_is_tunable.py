@@ -66,7 +66,7 @@ class TestTheThreshold:
     # BM25 gained a reachable ceiling. Weak now means a *low-IDF* word —
     # one appearing in several entries, which specificity scales down — so
     # the fixture below has "work" in all three.
-    WEAK = "work"
+    WEAK = "you work"
     WEAK_ENTRIES: ClassVar[list[Entry]] = [
         Entry(question="Are you open to remote work?", answer="Yes.", aliases=["remote"]),
         Entry(
@@ -81,8 +81,8 @@ class TestTheThreshold:
         assert entry is None
 
     def test_a_low_threshold_accepts_it(self):
-        entry, score = Index(self.WEAK_ENTRIES, threshold=0.2).answer(self.WEAK)
-        assert score >= 0.2
+        entry, score = Index(self.WEAK_ENTRIES, threshold=0.1).answer(self.WEAK)
+        assert score >= 0.1
         assert entry is not None
 
     def test_above_one_refuses_everything(self):
@@ -106,8 +106,11 @@ class TestTheOverlapGuardIsNowRead:
 
     def test_raising_it_turns_a_confident_match_into_a_refusal(self):
         query = "what is your rate for consulting"
-        loose = Index(DILUTED, tuning=Tuning(minimum_overlap=1))
-        strict = Index(DILUTED, tuning=Tuning(minimum_overlap=2))
+        # 0.446 with the guard at 1, which is a hair under the 0.45 default
+        # now that phrase overlap is IDF-weighted. The threshold is lowered
+        # so this test turns on the guard rather than on the threshold.
+        loose = Index(DILUTED, tuning=Tuning(minimum_overlap=1), threshold=0.2)
+        strict = Index(DILUTED, tuning=Tuning(minimum_overlap=2), threshold=0.2)
         assert loose.answer(query)[0] is not None
         assert strict.answer(query)[0] is None
 
@@ -127,8 +130,8 @@ class TestTheOverlapGuardIsNowRead:
         # so the guard can be exercised without the whole pass.
         asked = {"notice", "of", "termination"}
         content = asked - loose.tuning.stopwords
-        assert loose._phrase_score(0, asked, content) > 0
-        assert strict._phrase_score(0, asked, content) == 0
+        assert loose._phrase_score(0, asked, content, asked) > 0
+        assert strict._phrase_score(0, asked, content, asked) == 0
 
     def test_zero_lets_a_query_match_on_filler(self):
         index = Index(DILUTED, tuning=Tuning(minimum_overlap=0))

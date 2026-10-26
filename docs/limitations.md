@@ -55,6 +55,46 @@ source of surprise — Porter stemming turns "university" and "universe" into
 the same token — and for a question set you control, an alias is both cheaper
 and exact.
 
+## One shared word can carry a wrong match
+
+Phrase overlap is weighted by inverse document frequency, so filler no longer
+decides a match. A single *substantive* word still can, and in an index whose
+entries cover related subjects that is where the remaining errors are.
+
+Measured against an index of twenty-five entries, asked by simulated people in
+eleven professional roles:
+
+```
+'how do you decide when to refactor'  ->  "How do you decide build versus buy?"
+'what dashboards do you build'        ->  "How do you decide build versus buy?"
+'would you be a technical cofounder'  ->  "How do you approach technical debt?"
+'have you built something from zero'  ->  "How do you decide build versus buy?"
+```
+
+Each shares exactly one content word with the entry it matched — *decide*,
+*build*, *technical* — and nothing with the entry a person would have picked.
+No threshold separates these from correct matches at the same score, because
+the signal that would separate them is what the words *mean*.
+
+Raising `minimum_overlap` to 2 removes them along with every correct one-word
+match, which is worse. The fix that works is an alias on the entry that should
+have won, which is what `unanswered()` is for: it reports what was asked and
+missed, and an alias closes it for good.
+
+## A question of pure filler can still be answered
+
+A query with no substantive words is deliberately allowed to match on filler,
+because filler is all it has — that is what makes "how are you" and "who are
+you" work. The cost is that a *fragment* of filler is also answered:
+
+```
+'what is your'   ->  0.662, answered
+```
+
+There is no lexical signal that separates an incomplete question from a
+complete one made of the same kind of words. Raising the threshold above 0.662
+would refuse real small talk, which is the worse trade.
+
 ## Scores are not comparable across indexes
 
 A 0.769 in one index is not the same confidence as 0.769 in another. IDF

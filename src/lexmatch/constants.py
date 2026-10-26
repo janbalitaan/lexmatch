@@ -63,17 +63,40 @@ AMBIGUITY_MARGIN = 0.05
 # than as two weak guesses.
 #
 # A tie is only worth asking about when both candidates are confidently
-# matched. Measured over thirty simulated visitors, "what is your rate"
-# tied at 0.727 against two rate entries and asking which was meant was
-# exactly right — while "what do you work on" tied at 0.537 against "Are you
-# open to remote work" and "Do you need visa sponsorship", on the word "work"
-# plus filler, and the clarifying question was nonsense.
+# matched. Below the floor the tie is reported as unanswered with the
+# contenders as suggestions, which is honest: several candidates at a middling
+# score mean the question was not understood, and letting the asker choose
+# beats a one-in-four guess.
 #
-# Below the floor the tie is reported as unanswered with the contenders as
-# suggestions, which is honest: four candidates at 0.5 mean the question was
-# not understood, and letting the visitor choose beats a one-in-four guess.
-AMBIGUITY_FLOOR = 0.65
+# This started at 0.65, chosen when "what do you work on" tied four ways at
+# 0.537 and asked "remote work, or visa sponsorship?" — which read as
+# nonsense. That tie was an artifact of weighting every shared token equally:
+# the four entries shared "work" plus filler and nothing else. Once phrase
+# overlap was weighted by inverse document frequency the same query scored
+# 0.921 against one entry and 0.000 against the rest, so the floor was no
+# longer holding back anything it was built for — and at 0.65 it had started
+# refusing *genuine* ambiguity instead, which measures 0.580 for two rate
+# entries and 0.633 for two notice-period entries.
+#
+# 0.50 sits below both and above the noise. The knob stays because an index
+# whose entries are near-duplicates may want it higher.
+AMBIGUITY_FLOOR = 0.50
 
 # How many alternatives to offer for a genuine ambiguity. Two is a question;
 # five is a menu, and a menu is what `suggestions` is for.
 AMBIGUITY_ALTERNATIVES = 3
+
+
+# The tag `SmallTalk.entries` puts on what it builds, and the marker `Index`
+# reads to know an entry is a social formula rather than a subject.
+#
+# Social phrasings are short, and the length penalty favours short entries, so
+# a message that merely *contains* a pleasantry used to be answered by one.
+# Measured over fifteen simulated visitors: "is the pay good" scored 1.000
+# against the greeting entry, on "good" matching "good morning"; "do you care
+# about the frontend at all" scored 0.957 against the farewell, on "care"
+# matching "take care". Both are real questions with a social word in them.
+#
+# Renaming this is enough to opt a custom set of entries into the same
+# treatment, or out of it.
+SMALL_TALK_TAG = "smalltalk"

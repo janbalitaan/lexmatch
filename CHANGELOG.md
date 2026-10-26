@@ -10,6 +10,40 @@ caller is listed under **Changed** with what to do about it.
 
 ### Added
 
+- Two more scoring defects, found by simulating eleven professional roles —
+  technical and non-technical recruiters, developers, senior developers,
+  architects, product owners, scrum masters, engineering managers, a CEO, a
+  CTO — and fifteen people who are not hiring anyone: a nurse, a student, a
+  business owner, a journalist, a teenager, a non-native speaker, someone
+  typing on a phone.
+  - **A shared question *form* was read as a shared subject.** Phrase overlap
+    counted every token equally, so "how do you" weighed the same as
+    "refactor" — and most questions in an index share a form. "how do you
+    mentor juniors" scored **1.000** against the small-talk entry "how are
+    you", on two shared tokens that mean nothing. Overlap is now weighted by
+    inverse document frequency, which is the same ratio over the information
+    each token carries rather than over the count.
+  - **Small talk answered real questions.** Social phrasings are short and
+    the length penalty favours short entries, so an entry built from "take
+    care" won any message containing "care": "do you care about the frontend
+    at all" scored 0.957 against the farewell, and "is the pay good" scored
+    1.000 against the greeting because "good" matches "good morning". A
+    small-talk entry may now only answer when every substantive word in the
+    message is one its own phrasings use. The marker is `SMALL_TALK_TAG`, so
+    a custom set of entries can opt in or out.
+  - Also found: the exact-match shortcut ran *before* the overlap guard and
+    compared what survived filtering rather than what was asked, so "how do
+    you mentor juniors" matched the alias "how do you do" exactly once
+    "mentor" and "juniors" were dropped as unknown words. And a bare
+    acknowledgement is no longer a question — "great, thanks!" was answered
+    correctly while "great" was reported as unanswered, which made a right
+    answer look like a partial failure.
+- `ambiguity_floor` lowered from 0.65 to 0.50. It was set when a four-way tie
+  at 0.537 produced a nonsense clarifying question; weighting the overlap
+  removed that tie — the same query now scores 0.921 against one entry and
+  0.000 against the rest — so at 0.65 the floor had stopped holding back
+  anything it was built for and had started refusing genuine ambiguity, which
+  measures 0.580 for two rate entries.
 - Three scoring defects found by simulating twenty recruiters and ten
   ordinary visitors against a realistic index — sixty-seven messages written
   the way each kind of person actually writes.

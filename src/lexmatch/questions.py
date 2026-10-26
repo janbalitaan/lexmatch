@@ -102,9 +102,40 @@ class QuestionSplitter:
         """Whether this message asks more than one thing."""
         return len(cls.split(message)) > 1
 
+    #: Words that acknowledge rather than ask. Splitting "great, thanks!"
+    #: yields "great" and "thanks"; the second is answerable and the first is
+    #: not a question at all, so reporting it as unanswered made a correct
+    #: reply look like a partial failure. Replace the set to change what
+    #: counts as an acknowledgement.
+    ACKNOWLEDGEMENTS: frozenset[str] = frozenset(
+        {
+            "great",
+            "good",
+            "ok",
+            "okay",
+            "cool",
+            "nice",
+            "right",
+            "sure",
+            "perfect",
+            "lovely",
+            "excellent",
+            "awesome",
+            "brilliant",
+            "fine",
+            "alright",
+            "noted",
+            "understood",
+            "got it",
+            "makes sense",
+            "fair enough",
+            "no worries",
+        }
+    )
+
     @classmethod
     def _keep_usable(cls, parts: list[str]) -> list[str]:
-        """Drop the empty fragments that splitting leaves behind.
+        """Drop the fragments that are not questions.
 
         A single word is kept: "remote?" is a question and the terminator
         already said so. An earlier version folded any single word into its
@@ -113,5 +144,18 @@ class QuestionSplitter:
 
         A single *character* is dropped, because splitting on a full stop
         makes them out of "e.g." and "U.S.".
+
+        A bare acknowledgement is dropped too. "great, thanks!" splits into
+        "great" and "thanks", and only the second is a thing to answer —
+        reporting "great" as unanswered turned a correct reply into a
+        partial failure in the measured runs.
         """
-        return [part.strip() for part in parts if len(part.strip()) > _SHORTEST_QUESTION]
+        kept = []
+        for part in parts:
+            cleaned = part.strip()
+            if len(cleaned) <= _SHORTEST_QUESTION:
+                continue
+            if cleaned.strip(",.!? ").lower() in cls.ACKNOWLEDGEMENTS:
+                continue
+            kept.append(cleaned)
+        return kept

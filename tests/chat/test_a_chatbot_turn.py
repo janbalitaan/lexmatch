@@ -231,16 +231,17 @@ class TestTheReplyItself:
 class TestAWeakTieIsNotAmbiguity:
     """A tie among weak matches is a question that was not understood.
 
-    Measured over thirty simulated visitors: "what do you work on" tied at
-    0.537 against "Are you open to remote work" and "Do you need visa
-    sponsorship" — on the word "work" plus filler — and asking which was
-    meant read as nonsense. Genuine ambiguity, "what is your rate" against
-    two rate entries, sat at 0.727.
+    This guard was added when "what do you work on" tied four ways at 0.537
+    and asked "remote work, or visa sponsorship?" — which read as nonsense.
+    That tie no longer happens: it was an artifact of weighting every shared
+    token equally, and once phrase overlap was weighted by inverse document
+    frequency the same query scored 0.637 against one entry and 0.133 against
+    the rest. The first test below pins that, because it is the real fix and
+    a regression in it would be invisible otherwise.
 
-    The margin is widened in these fixtures so a tie is guaranteed. Finding
-    a natural tie that also lands between the threshold and the floor means
-    tuning a fixture until two scores coincide, which tests the fixture
-    rather than the floor.
+    The floor stays as a guard and a knob. These tests widen the margin to
+    force a tie, because a natural one no longer occurs in a fixture this
+    size — which is the point.
     """
 
     COMMON: ClassVar[list[Entry]] = [
@@ -251,36 +252,35 @@ class TestAWeakTieIsNotAmbiguity:
         Entry(question="Do you enjoy the work?", answer="Very much.", aliases=["enjoyment"]),
         Entry(question="Is the work interesting?", answer="Usually.", aliases=["interest"]),
     ]
-    #: Scores 0.571 — over the threshold, under the floor.
-    WEAK_TIE = "you work"
+    #: Scores 0.230 — a shared "work" plus filler, well under the threshold.
+    WEAK = "you work"
 
-    def _index(self, floor: float = 0.65) -> Index:
-        return Index(
-            self.COMMON,
-            tuning=Tuning(ambiguity_margin=0.2, ambiguity_floor=floor),
+    def test_filler_no_longer_produces_a_tie_at_all(self):
+        """The regression guard for the weighting that made the floor moot."""
+        ranked = Index(self.COMMON).score("what do you work on")
+        assert ranked[0][0] - ranked[1][0] > 0.4, (
+            f"filler is tying again: {ranked[0][0]:.3f} vs {ranked[1][0]:.3f}"
         )
 
-    def test_the_query_is_in_the_window(self):
-        """Over the threshold, under the floor — stated so a drift in either
-        shows up here rather than as a confusing failure below."""
-        index = self._index()
-        score = index.score(self.WEAK_TIE)[0][0]
-        assert index.threshold <= score < index.tuning.ambiguity_floor
-
-    def test_there_is_more_than_one_contender(self):
-        assert len(self._index(floor=0.0).reply(self.WEAK_TIE).alternatives) > 1
-
     def test_a_weak_tie_is_reported_as_unanswered(self):
-        assert self._index().reply(self.WEAK_TIE).outcome is Outcome.UNANSWERED
+        forced = Index(self.COMMON, tuning=Tuning(ambiguity_margin=0.2))
+        assert forced.reply(self.WEAK).outcome is Outcome.UNANSWERED
 
     def test_the_contenders_are_offered_as_suggestions(self):
-        """So the visitor chooses rather than the index guessing."""
-        assert self._index().reply(self.WEAK_TIE).suggestions
+        """So the asker chooses rather than the index guessing."""
+        forced = Index(self.COMMON, tuning=Tuning(ambiguity_margin=0.2, threshold=0.1))
+        assert forced.reply(self.WEAK).suggestions
 
     def test_lowering_the_floor_makes_it_ambiguity_again(self):
-        assert self._index(floor=0.0).reply(self.WEAK_TIE).outcome is Outcome.AMBIGUOUS
+        loose = Index(
+            self.COMMON,
+            tuning=Tuning(ambiguity_margin=0.2, ambiguity_floor=0.0, threshold=0.1),
+        )
+        assert loose.reply(self.WEAK).outcome is Outcome.AMBIGUOUS
 
     def test_a_confident_tie_is_still_ambiguity(self):
+        """Two rate entries and a query naming neither: 0.580, over the
+        floor, and asking which was meant is exactly right."""
         confident = [
             Entry(question="What is your rate for design work?", answer="£600."),
             Entry(question="What is your rate for review work?", answer="£500."),
